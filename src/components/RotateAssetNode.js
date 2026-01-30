@@ -16,16 +16,19 @@ function formatValue(value) {
 }
 
 export default function RotateAssetNode({ data, id }) {
-  const { holdings = [], onRotationChange, onRemove } = data;
+  const { holdings = [], onRotationChange, onInputChange, onRemove, savedInputs } = data;
   const onRotationChangeRef = useRef(onRotationChange);
+  const onInputChangeRef = useRef(onInputChange);
   onRotationChangeRef.current = onRotationChange;
+  onInputChangeRef.current = onInputChange;
 
-  const [fromAsset, setFromAsset] = useState('');
-  const [sellAmount, setSellAmount] = useState('');
-  const [toAsset, setToAsset] = useState('');
-  const [toPrice, setToPrice] = useState(null);
-  const [toType, setToType] = useState(null);
+  const [fromAsset, setFromAsset] = useState(savedInputs?.fromAsset || '');
+  const [sellAmount, setSellAmount] = useState(savedInputs?.sellAmount || '');
+  const [toAsset, setToAsset] = useState(savedInputs?.toAsset || '');
+  const [toPrice, setToPrice] = useState(savedInputs?.toPrice ?? null);
+  const [toType, setToType] = useState(savedInputs?.toType ?? null);
   const [isFetchingPrice, setIsFetchingPrice] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const selectedHolding = holdings.find(h => h.ticker === fromAsset);
   const sellValue = selectedHolding && sellAmount
@@ -34,11 +37,21 @@ export default function RotateAssetNode({ data, id }) {
 
   const buyAmount = toPrice && sellValue ? sellValue / toPrice : 0;
 
-  // Fetch price when toAsset changes
+  // Mark as initialized after first render
+  useEffect(() => {
+    setIsInitialized(true);
+  }, []);
+
+  // Fetch price when toAsset changes (skip if we have saved price on init)
   useEffect(() => {
     if (!toAsset.trim()) {
       setToPrice(null);
       setToType(null);
+      return;
+    }
+
+    // Skip fetch on initial load if we have saved price
+    if (!isInitialized && savedInputs?.toPrice !== undefined) {
       return;
     }
 
@@ -51,7 +64,22 @@ export default function RotateAssetNode({ data, id }) {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [toAsset]);
+  }, [toAsset, isInitialized, savedInputs?.toPrice]);
+
+  // Save inputs when they change
+  useEffect(() => {
+    if (!isInitialized) return;
+    const callback = onInputChangeRef.current;
+    if (callback) {
+      callback(id, {
+        fromAsset,
+        sellAmount,
+        toAsset,
+        toPrice,
+        toType,
+      });
+    }
+  }, [isInitialized, id, fromAsset, sellAmount, toAsset, toPrice, toType]);
 
   // Notify parent of rotation changes
   useEffect(() => {

@@ -16,7 +16,8 @@ function formatValue(value) {
 }
 
 export default function PortfolioNode({ data, id }) {
-  const [holdings, setHoldings] = useState(data.holdings || []);
+  // Use holdings from parent (allows restoration from localStorage)
+  const holdings = data.holdings || [];
   const [newTicker, setNewTicker] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -42,14 +43,12 @@ export default function PortfolioNode({ data, id }) {
     };
 
     const updated = [...holdings, newHolding];
-    setHoldings(updated);
     data.onHoldingsChange?.(id, updated);
     setIsLoading(false);
   }, [holdings, newTicker, newAmount, data, id]);
 
   const removeHolding = useCallback((index) => {
     const updated = holdings.filter((_, i) => i !== index);
-    setHoldings(updated);
     data.onHoldingsChange?.(id, updated);
   }, [holdings, data, id]);
 

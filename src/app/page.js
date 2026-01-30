@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, useMemo } from 'react';
+import { useCallback, useState, useMemo, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -14,6 +14,7 @@ import '@xyflow/react/dist/style.css';
 import PortfolioNode from '@/components/PortfolioNode';
 import RotateAssetNode from '@/components/RotateAssetNode';
 import ProjectedPortfolioNode from '@/components/ProjectedPortfolioNode';
+import { fetchPrice } from '@/lib/fetchPrice';
 
 const nodeTypes = {
   portfolio: PortfolioNode,
@@ -23,8 +24,9 @@ const nodeTypes = {
 
 const PORTFOLIO_ID = 'portfolio-1';
 const PROJECTED_ID = 'projected-1';
+const STORAGE_KEY = 'folioli-state';
 
-const initialNodes = [
+const defaultNodes = [
   {
     id: PORTFOLIO_ID,
     type: 'portfolio',
@@ -33,12 +35,130 @@ const initialNodes = [
   },
 ];
 
+function loadState() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.error('Failed to load state:', e);
+  }
+  return null;
+}
+
+function saveState(state) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.error('Failed to save state:', e);
+  }
+}
+
 export default function Home() {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [nodes, setNodes, onNodesChange] = useNodesState(defaultNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [holdings, setHoldings] = useState([]);
   const [rotations, setRotations] = useState({});
+  const [rotationInputs, setRotationInputs] = useState({});
   const [rotationCount, setRotationCount] = useState(0);
+
+  const isInitialMount = useRef(true);
+
+  // Refresh prices for all holdings
+  const refreshPrices = useCallback(async (holdingsToRefresh) => {
+    if (!holdingsToRefresh || holdingsToRefresh.length === 0) return holdingsToRefresh;
+
+    const refreshed = await Promise.all(
+      holdingsToRefresh.map(async (holding) => {
+        const { price, type } = await fetchPrice(holding.ticker);
+        return {
+          ...holding,
+          price: price ?? holding.price,
+          type: type !== 'unknown' ? type : holding.type,
+          value: price ? price * holding.amount : holding.value,
+        };
+      })
+    );
+    return refreshed;
+  }, []);
+
+  // Load state from localStorage on mount
+  useEffect(() => {
+    const loadAndRefresh = async () => {
+      const saved = loadState();
+      if (saved) {
+        if (saved.nodes) setNodes(saved.nodes);
+        if (saved.edges) setEdges(saved.edges);
+        if (saved.rotationCount !== undefined) setRotationCount(saved.rotationCount);
+
+        // Load with stale prices first for immediate display
+        if (saved.holdings) setHoldings(saved.holdings);
+        if (saved.rotations) setRotations(saved.rotations);
+        if (saved.rotationInputs) setRotationInputs(saved.rotationInputs);
+
+        setIsHydrated(true);
+
+        // Refresh prices in background after initial render
+        if (saved.holdings && saved.holdings.length > 0) {
+          const refreshedHoldings = await refreshPrices(saved.holdings);
+          setHoldings(refreshedHoldings);
+        }
+
+        // Refresh rotation input prices
+        if (saved.rotationInputs && Object.keys(saved.rotationInputs).length > 0) {
+          const refreshedInputs = {};
+          for (const [nodeId, inputs] of Object.entries(saved.rotationInputs)) {
+            if (inputs.toAsset) {
+              const { price, type } = await fetchPrice(inputs.toAsset);
+              refreshedInputs[nodeId] = {
+                ...inputs,
+                toPrice: price ?? inputs.toPrice,
+                toType: type !== 'unknown' ? type : inputs.toType,
+              };
+            } else {
+              refreshedInputs[nodeId] = inputs;
+            }
+          }
+          setRotationInputs(refreshedInputs);
+        }
+      } else {
+        setIsHydrated(true);
+      }
+    };
+
+    loadAndRefresh();
+  }, [setNodes, setEdges, refreshPrices]);
+
+  // Save state to localStorage when it changes
+  useEffect(() => {
+    if (!isHydrated) return;
+    // Skip saving on initial mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    // Strip callbacks from nodes before saving
+    const nodesToSave = nodes.map(node => ({
+      id: node.id,
+      type: node.type,
+      position: node.position,
+      data: {},
+    }));
+
+    saveState({
+      nodes: nodesToSave,
+      edges,
+      holdings,
+      rotations,
+      rotationInputs,
+      rotationCount,
+    });
+  }, [isHydrated, nodes, edges, holdings, rotations, rotationInputs, rotationCount]);
 
   // Handle node changes and clean up rotations when nodes are deleted
   const handleNodesChange = useCallback((changes) => {
@@ -52,6 +172,13 @@ export default function Home() {
     if (deletedRotateIds.length > 0) {
       // Clean up rotation data
       setRotations(prev => {
+        const updated = { ...prev };
+        deletedRotateIds.forEach(id => delete updated[id]);
+        return updated;
+      });
+
+      // Clean up rotation inputs
+      setRotationInputs(prev => {
         const updated = { ...prev };
         deletedRotateIds.forEach(id => delete updated[id]);
         return updated;
@@ -99,6 +226,12 @@ export default function Home() {
       const { [nodeId]: _, ...rest } = prev;
       return rest;
     });
+
+    // Clean up rotation inputs
+    setRotationInputs(prev => {
+      const { [nodeId]: _, ...rest } = prev;
+      return rest;
+    });
   }, [setNodes, setEdges]);
 
   const handleHoldingsChange = useCallback((nodeId, newHoldings) => {
@@ -113,6 +246,13 @@ export default function Home() {
       }
       return { ...prev, [nodeId]: rotation };
     });
+  }, []);
+
+  const handleRotationInputChange = useCallback((nodeId, inputs) => {
+    setRotationInputs(prev => ({
+      ...prev,
+      [nodeId]: inputs,
+    }));
   }, []);
 
   const handleAddRotation = useCallback(() => {
@@ -239,7 +379,9 @@ export default function Home() {
           data: {
             ...node.data,
             holdings,
+            savedInputs: rotationInputs[node.id],
             onRotationChange: handleRotationChange,
+            onInputChange: handleRotationInputChange,
             onRemove: handleRemoveRotation,
           },
         };
@@ -256,7 +398,16 @@ export default function Home() {
       }
       return node;
     });
-  }, [nodes, holdings, projectedHoldings, handleHoldingsChange, handleAddRotation, handleRotationChange, handleRemoveRotation]);
+  }, [nodes, holdings, rotationInputs, projectedHoldings, handleHoldingsChange, handleAddRotation, handleRotationChange, handleRotationInputChange, handleRemoveRotation]);
+
+  // Don't render until hydrated to avoid hydration mismatch
+  if (!isHydrated) {
+    return (
+      <div className="w-screen h-screen flex items-center justify-center bg-zinc-100 dark:bg-zinc-900">
+        <div className="text-zinc-500">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-screen h-screen">
