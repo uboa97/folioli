@@ -14,6 +14,7 @@ import '@xyflow/react/dist/style.css';
 import PortfolioNode from '@/components/PortfolioNode';
 import RotateAssetNode from '@/components/RotateAssetNode';
 import SellAssetNode from '@/components/SellAssetNode';
+import BuyAssetNode from '@/components/BuyAssetNode';
 import ProjectedPortfolioNode from '@/components/ProjectedPortfolioNode';
 import { fetchPrice } from '@/lib/fetchPrice';
 
@@ -21,6 +22,7 @@ const nodeTypes = {
   portfolio: PortfolioNode,
   rotate: RotateAssetNode,
   sell: SellAssetNode,
+  buy: BuyAssetNode,
   projected: ProjectedPortfolioNode,
 };
 
@@ -70,6 +72,9 @@ export default function Home() {
   const [sells, setSells] = useState({});
   const [sellInputs, setSellInputs] = useState({});
   const [sellCount, setSellCount] = useState(0);
+  const [buys, setBuys] = useState({});
+  const [buyInputs, setBuyInputs] = useState({});
+  const [buyCount, setBuyCount] = useState(0);
 
   const isInitialMount = useRef(true);
 
@@ -102,6 +107,7 @@ export default function Home() {
         if (saved.edges) setEdges(saved.edges);
         if (saved.rotationCount !== undefined) setRotationCount(saved.rotationCount);
         if (saved.sellCount !== undefined) setSellCount(saved.sellCount);
+        if (saved.buyCount !== undefined) setBuyCount(saved.buyCount);
 
         // Load with stale prices first for immediate display
         if (saved.holdings) setHoldings(saved.holdings);
@@ -109,6 +115,8 @@ export default function Home() {
         if (saved.rotationInputs) setRotationInputs(saved.rotationInputs);
         if (saved.sells) setSells(saved.sells);
         if (saved.sellInputs) setSellInputs(saved.sellInputs);
+        if (saved.buys) setBuys(saved.buys);
+        if (saved.buyInputs) setBuyInputs(saved.buyInputs);
 
         setIsHydrated(true);
 
@@ -134,6 +142,24 @@ export default function Home() {
             }
           }
           setRotationInputs(refreshedInputs);
+        }
+
+        // Refresh buy input prices
+        if (saved.buyInputs && Object.keys(saved.buyInputs).length > 0) {
+          const refreshedBuyInputs = {};
+          for (const [nodeId, inputs] of Object.entries(saved.buyInputs)) {
+            if (inputs.toAsset) {
+              const { price, type } = await fetchPrice(inputs.toAsset);
+              refreshedBuyInputs[nodeId] = {
+                ...inputs,
+                toPrice: price ?? inputs.toPrice,
+                toType: type !== 'unknown' ? type : inputs.toType,
+              };
+            } else {
+              refreshedBuyInputs[nodeId] = inputs;
+            }
+          }
+          setBuyInputs(refreshedBuyInputs);
         }
       } else {
         setIsHydrated(true);
@@ -170,12 +196,15 @@ export default function Home() {
       sells,
       sellInputs,
       sellCount,
+      buys,
+      buyInputs,
+      buyCount,
     });
-  }, [isHydrated, nodes, edges, holdings, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount]);
+  }, [isHydrated, nodes, edges, holdings, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount]);
 
   // Check if projected node should exist
   const shouldHaveProjectedNode = useCallback((nodesList) => {
-    return nodesList.some(n => n.type === 'rotate' || n.type === 'sell');
+    return nodesList.some(n => n.type === 'rotate' || n.type === 'sell' || n.type === 'buy');
   }, []);
 
   // Handle node changes and clean up when nodes are deleted
@@ -190,6 +219,11 @@ export default function Home() {
     // Check for deleted sell nodes
     const deletedSellIds = changes
       .filter(change => change.type === 'remove' && change.id.startsWith('sell-'))
+      .map(change => change.id);
+
+    // Check for deleted buy nodes
+    const deletedBuyIds = changes
+      .filter(change => change.type === 'remove' && change.id.startsWith('buy-'))
       .map(change => change.id);
 
     if (deletedRotateIds.length > 0) {
@@ -224,8 +258,24 @@ export default function Home() {
       ));
     }
 
+    if (deletedBuyIds.length > 0) {
+      setBuys(prev => {
+        const updated = { ...prev };
+        deletedBuyIds.forEach(id => delete updated[id]);
+        return updated;
+      });
+      setBuyInputs(prev => {
+        const updated = { ...prev };
+        deletedBuyIds.forEach(id => delete updated[id]);
+        return updated;
+      });
+      setEdges(prev => prev.filter(edge =>
+        !deletedBuyIds.includes(edge.source) && !deletedBuyIds.includes(edge.target)
+      ));
+    }
+
     // Remove projected node if no more action nodes
-    if (deletedRotateIds.length > 0 || deletedSellIds.length > 0) {
+    if (deletedRotateIds.length > 0 || deletedSellIds.length > 0 || deletedBuyIds.length > 0) {
       setNodes(prev => {
         if (!shouldHaveProjectedNode(prev)) {
           return prev.filter(n => n.id !== PROJECTED_ID);
@@ -316,6 +366,45 @@ export default function Home() {
       [nodeId]: inputs,
     }));
   }, []);
+
+  const handleBuyChange = useCallback((nodeId, buy) => {
+    setBuys(prev => {
+      if (buy === null) {
+        const { [nodeId]: _, ...rest } = prev;
+        return rest;
+      }
+      return { ...prev, [nodeId]: buy };
+    });
+  }, []);
+
+  const handleBuyInputChange = useCallback((nodeId, inputs) => {
+    setBuyInputs(prev => ({
+      ...prev,
+      [nodeId]: inputs,
+    }));
+  }, []);
+
+  // Remove a buy node
+  const handleRemoveBuy = useCallback((nodeId) => {
+    setNodes(prev => {
+      const remaining = prev.filter(n => n.id !== nodeId);
+      if (!shouldHaveProjectedNode(remaining)) {
+        return remaining.filter(n => n.id !== PROJECTED_ID);
+      }
+      return remaining;
+    });
+    setEdges(prev => prev.filter(edge =>
+      edge.source !== nodeId && edge.target !== nodeId
+    ));
+    setBuys(prev => {
+      const { [nodeId]: _, ...rest } = prev;
+      return rest;
+    });
+    setBuyInputs(prev => {
+      const { [nodeId]: _, ...rest } = prev;
+      return rest;
+    });
+  }, [setNodes, setEdges, shouldHaveProjectedNode]);
 
   // Helper to ensure projected node exists
   const ensureProjectedNode = useCallback(() => {
@@ -412,7 +501,47 @@ export default function Home() {
     });
   }, [nodes, sellCount, setNodes, setEdges, ensureProjectedNode]);
 
-  // Calculate projected holdings based on all rotations and sells
+  const handleAddBuy = useCallback(() => {
+    const newBuyId = `buy-${buyCount + 1}`;
+    setBuyCount(prev => prev + 1);
+
+    const actionNodes = nodes.filter(n => n.type === 'rotate' || n.type === 'sell' || n.type === 'buy');
+    const yOffset = actionNodes.length * 180;
+
+    setNodes(prev => {
+      let newNodes = [...prev];
+      newNodes.push({
+        id: newBuyId,
+        type: 'buy',
+        position: { x: 500, y: 50 + yOffset },
+        data: {},
+      });
+      return newNodes;
+    });
+
+    ensureProjectedNode();
+
+    setEdges(prev => {
+      const newEdges = [...prev];
+      newEdges.push({
+        id: `edge-portfolio-${newBuyId}`,
+        source: PORTFOLIO_ID,
+        target: newBuyId,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: '#3b82f6' },
+      });
+      newEdges.push({
+        id: `edge-${newBuyId}-projected`,
+        source: newBuyId,
+        target: PROJECTED_ID,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: '#22c55e' },
+      });
+      return newEdges;
+    });
+  }, [nodes, buyCount, setNodes, setEdges, ensureProjectedNode]);
+
+  // Calculate projected holdings based on all rotations, sells, and buys
   const projectedHoldings = useMemo(() => {
     const projected = holdings.map(h => ({ ...h }));
     let totalCash = 0;
@@ -465,13 +594,42 @@ export default function Home() {
       totalCash += sellValue;
     });
 
-    // Add cash if any
-    if (totalCash > 0) {
+    // Apply each buy (spend cash to buy asset)
+    Object.values(buys).forEach(buy => {
+      if (!buy) return;
+
+      const { cashAmount, toAsset, toPrice, toType, buyAmount } = buy;
+
+      // Reduce cash
+      totalCash -= cashAmount;
+
+      // Add or increase the bought asset
+      const toIndex = projected.findIndex(h => h.ticker === toAsset);
+      if (toIndex !== -1) {
+        projected[toIndex].amount += buyAmount;
+        projected[toIndex].value = projected[toIndex].amount * (projected[toIndex].price || 0);
+      } else {
+        projected.push({
+          ticker: toAsset,
+          amount: buyAmount,
+          price: toPrice,
+          type: toType,
+          value: buyAmount * toPrice,
+        });
+      }
+    });
+
+    // Add/update cash position if any
+    if (totalCash !== 0) {
       const cashIndex = projected.findIndex(h => h.ticker === 'USD');
       if (cashIndex !== -1) {
         projected[cashIndex].amount += totalCash;
         projected[cashIndex].value = projected[cashIndex].amount;
-      } else {
+        // Remove if depleted
+        if (projected[cashIndex].amount <= 0.000001) {
+          projected.splice(cashIndex, 1);
+        }
+      } else if (totalCash > 0) {
         projected.push({
           ticker: 'USD',
           amount: totalCash,
@@ -483,7 +641,7 @@ export default function Home() {
     }
 
     return projected.sort((a, b) => (b.value || 0) - (a.value || 0));
-  }, [holdings, rotations, sells]);
+  }, [holdings, rotations, sells, buys]);
 
   // Inject data and callbacks into nodes
   const nodesWithData = useMemo(() => {
@@ -497,6 +655,7 @@ export default function Home() {
             onHoldingsChange: handleHoldingsChange,
             onAddRotation: handleAddRotation,
             onAddSell: handleAddSell,
+            onAddBuy: handleAddBuy,
           },
         };
       }
@@ -526,6 +685,18 @@ export default function Home() {
           },
         };
       }
+      if (node.type === 'buy') {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            savedInputs: buyInputs[node.id],
+            onBuyChange: handleBuyChange,
+            onInputChange: handleBuyInputChange,
+            onRemove: handleRemoveBuy,
+          },
+        };
+      }
       if (node.type === 'projected') {
         return {
           ...node,
@@ -538,7 +709,7 @@ export default function Home() {
       }
       return node;
     });
-  }, [nodes, holdings, rotationInputs, sellInputs, projectedHoldings, handleHoldingsChange, handleAddRotation, handleAddSell, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell]);
+  }, [nodes, holdings, rotationInputs, sellInputs, buyInputs, projectedHoldings, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy]);
 
   if (!isHydrated) {
     return (

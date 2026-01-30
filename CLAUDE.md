@@ -28,6 +28,7 @@ src/
 │   ├── PortfolioNode.js       # Initial portfolio holdings input
 │   ├── RotateAssetNode.js     # Asset rotation (sell A, buy B)
 │   ├── SellAssetNode.js       # Asset liquidation (sell for cash)
+│   ├── BuyAssetNode.js        # Buy asset with cash
 │   └── ProjectedPortfolioNode.js  # Shows projected portfolio state
 └── lib/
     └── fetchPrice.js          # Client-side price fetching utility
@@ -52,7 +53,12 @@ src/
    - Sell asset for USD
    - Adds to cash position in projected portfolio
 
-4. **Projected Portfolio** (purple)
+4. **Buy with Cash** (green)
+   - Spend USD to buy an asset
+   - Enter cash amount and target asset
+   - Reduces USD, adds purchased asset
+
+5. **Projected Portfolio** (purple)
    - Auto-created when first action node added
    - Shows portfolio after all rotations/sells
    - Displays allocation percentages
@@ -63,10 +69,11 @@ src/
 ```
 Portfolio Holdings
     ├─→ Rotate Asset Node(s) ──→ Projected Portfolio
-    └─→ Sell Asset Node(s)   ──→ Projected Portfolio
+    ├─→ Sell Asset Node(s)   ──→ Projected Portfolio
+    └─→ Buy Asset Node(s)    ──→ Projected Portfolio
 ```
 
-All action nodes (Rotate/Sell) connect to a single Projected Portfolio node.
+All action nodes (Rotate/Sell/Buy) connect to a single Projected Portfolio node.
 
 ## State Management
 
@@ -77,6 +84,8 @@ All action nodes (Rotate/Sell) connect to a single Projected Portfolio node.
 - `rotationInputs` - Rotation node UI state (dropdowns, inputs)
 - `sells` - Sell node calculations
 - `sellInputs` - Sell node UI state
+- `buys` - Buy node calculations (cash amount, target asset, amounts)
+- `buyInputs` - Buy node UI state
 - `nodes` - React Flow nodes (positions, types)
 - `edges` - React Flow edges (connections)
 
@@ -112,8 +121,11 @@ BTC, ETH, SOL, DOGE, ADA, XRP, DOT, MATIC, LINK, AVAX, ATOM, UNI, LTC, BCH, NEAR
    - Reduce asset by sellAmount
    - Accumulate sellValue as cash
    - Remove asset if depleted
-4. Add USD holding if cash > 0
-5. Sort by value descending
+4. Apply each buy:
+   - Reduce cash by cashAmount
+   - Increase/add toAsset by calculated buyAmount
+5. Add/update USD holding based on net cash
+6. Sort by value descending
 ```
 
 ## Key Features
