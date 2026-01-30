@@ -147,12 +147,20 @@ export default function PortfolioNode({ data, id }) {
         </div>
 
         {holdings.length > 0 && (
-          <button
-            onClick={() => data.onAddRotation?.(id)}
-            className="w-full mt-3 px-3 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 text-sm font-medium"
-          >
-            + Add Rotation
-          </button>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => data.onAddRotation?.(id)}
+              className="flex-1 px-3 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 text-sm font-medium"
+            >
+              + Rotate
+            </button>
+            <button
+              onClick={() => data.onAddSell?.(id)}
+              className="flex-1 px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm font-medium"
+            >
+              + Sell
+            </button>
+          </div>
         )}
       </div>
 
