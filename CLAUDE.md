@@ -29,6 +29,7 @@ src/
 │   ├── RotateAssetNode.js     # Asset rotation (sell A, buy B)
 │   ├── SellAssetNode.js       # Asset liquidation (sell for cash)
 │   ├── BuyAssetNode.js        # Buy asset with cash
+│   ├── PriceTargetNode.js     # Hypothetical price scenario
 │   └── ProjectedPortfolioNode.js  # Shows projected portfolio state
 └── lib/
     └── fetchPrice.js          # Client-side price fetching utility
@@ -58,7 +59,12 @@ src/
    - Enter cash amount and target asset
    - Reduces USD, adds purchased asset
 
-5. **Projected Portfolio** (purple)
+5. **Price Target** (cyan)
+   - Set hypothetical price for an asset
+   - Shows percentage change from current
+   - Projected portfolio recalculates values at target price
+
+6. **Projected Portfolio** (purple)
    - Auto-created when first action node added
    - Shows portfolio after all rotations/sells
    - Displays allocation percentages
@@ -68,12 +74,13 @@ src/
 
 ```
 Portfolio Holdings
-    ├─→ Rotate Asset Node(s) ──→ Projected Portfolio
-    ├─→ Sell Asset Node(s)   ──→ Projected Portfolio
-    └─→ Buy Asset Node(s)    ──→ Projected Portfolio
+    ├─→ Rotate Asset Node(s)   ──→ Projected Portfolio
+    ├─→ Sell Asset Node(s)     ──→ Projected Portfolio
+    ├─→ Buy Asset Node(s)      ──→ Projected Portfolio
+    └─→ Price Target Node(s)   ──→ Projected Portfolio
 ```
 
-All action nodes (Rotate/Sell/Buy) connect to a single Projected Portfolio node.
+All action nodes (Rotate/Sell/Buy/Price Target) connect to a single Projected Portfolio node.
 
 ## State Management
 
@@ -86,6 +93,8 @@ All action nodes (Rotate/Sell/Buy) connect to a single Projected Portfolio node.
 - `sellInputs` - Sell node UI state
 - `buys` - Buy node calculations (cash amount, target asset, amounts)
 - `buyInputs` - Buy node UI state
+- `priceTargets` - Price target node data (asset, target price)
+- `priceTargetInputs` - Price target node UI state
 - `nodes` - React Flow nodes (positions, types)
 - `edges` - React Flow edges (connections)
 
@@ -112,20 +121,21 @@ BTC, ETH, SOL, DOGE, ADA, XRP, DOT, MATIC, LINK, AVAX, ATOM, UNI, LTC, BCH, NEAR
 ## Projected Portfolio Calculation
 
 ```javascript
-1. Clone current holdings
-2. Apply each rotation:
+1. Build price override map from price targets
+2. Clone holdings with overridden prices applied
+3. Apply each rotation:
    - Reduce fromAsset by sellAmount
    - Increase/add toAsset by calculated buyAmount
    - Remove asset if amount <= 0.000001
-3. Apply each sell:
+4. Apply each sell:
    - Reduce asset by sellAmount
    - Accumulate sellValue as cash
    - Remove asset if depleted
-4. Apply each buy:
+5. Apply each buy:
    - Reduce cash by cashAmount
    - Increase/add toAsset by calculated buyAmount
-5. Add/update USD holding based on net cash
-6. Sort by value descending
+6. Add/update USD holding based on net cash
+7. Sort by value descending
 ```
 
 ## Key Features

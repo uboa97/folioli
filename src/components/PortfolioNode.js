@@ -64,9 +64,27 @@ export default function PortfolioNode({ data, id }) {
     <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[320px]">
       <div className="bg-blue-600 text-white px-4 py-2 rounded-t-lg font-semibold flex justify-between items-center">
         <span>Portfolio Holdings</span>
-        {totalValue > 0 && (
-          <span className="text-sm font-normal opacity-90">${formatValue(totalValue)}</span>
-        )}
+        <div className="flex items-center gap-2">
+          {totalValue > 0 && (
+            <span className="text-sm font-normal opacity-90">${formatValue(totalValue)}</span>
+          )}
+          <button
+            onClick={() => data.onDuplicate?.(id)}
+            className="text-white/70 hover:text-white hover:bg-blue-700 rounded px-1.5 py-0.5 text-xs"
+            title="Duplicate portfolio"
+          >
+            dup
+          </button>
+          {data.canRemove && (
+            <button
+              onClick={() => data.onRemove?.(id)}
+              className="text-white/70 hover:text-white hover:bg-blue-700 rounded px-1.5 py-0.5 text-xs"
+              title="Remove portfolio"
+            >
+              x
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="p-4">
@@ -147,25 +165,35 @@ export default function PortfolioNode({ data, id }) {
         </div>
 
         {holdings.length > 0 && (
-          <div className="flex gap-2 mt-3">
-            <button
-              onClick={() => data.onAddRotation?.(id)}
-              className="flex-1 px-2 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 text-sm font-medium"
-            >
-              + Rotate
-            </button>
-            <button
-              onClick={() => data.onAddSell?.(id)}
-              className="flex-1 px-2 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm font-medium"
-            >
-              + Sell
-            </button>
-            <button
-              onClick={() => data.onAddBuy?.(id)}
-              className="flex-1 px-2 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm font-medium"
-            >
-              + Buy
-            </button>
+          <div className="space-y-2 mt-3">
+            <div className="flex gap-2">
+              <button
+                onClick={() => data.onAddRotation?.(id)}
+                className="flex-1 px-2 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 text-sm font-medium"
+              >
+                + Rotate
+              </button>
+              <button
+                onClick={() => data.onAddSell?.(id)}
+                className="flex-1 px-2 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm font-medium"
+              >
+                + Sell
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => data.onAddBuy?.(id)}
+                className="flex-1 px-2 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm font-medium"
+              >
+                + Buy
+              </button>
+              <button
+                onClick={() => data.onAddPriceTarget?.(id)}
+                className="flex-1 px-2 py-2 bg-cyan-500 text-white rounded hover:bg-cyan-600 text-sm font-medium"
+              >
+                + Target
+              </button>
+            </div>
           </div>
         )}
       </div>
