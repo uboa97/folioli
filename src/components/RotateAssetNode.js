@@ -16,7 +16,7 @@ function formatValue(value) {
 }
 
 export default function RotateAssetNode({ data, id }) {
-  const { holdings = [], onRotationChange, onInputChange, onRemove, savedInputs } = data;
+  const { holdings = [], priceOverrides = {}, onRotationChange, onInputChange, onRemove, onAddChainedNode, savedInputs } = data;
   const onRotationChangeRef = useRef(onRotationChange);
   const onInputChangeRef = useRef(onInputChange);
   onRotationChangeRef.current = onRotationChange;
@@ -42,11 +42,20 @@ export default function RotateAssetNode({ data, id }) {
     setIsInitialized(true);
   }, []);
 
-  // Fetch price when toAsset changes (skip if we have saved price on init)
+  // Fetch price when toAsset changes (skip if we have saved price on init or if there's a price override)
   useEffect(() => {
     if (!toAsset.trim()) {
       setToPrice(null);
       setToType(null);
+      return;
+    }
+
+    const assetKey = toAsset.toUpperCase().trim();
+
+    // Check if there's a price override from a preceding Price Target node
+    if (priceOverrides[assetKey] !== undefined) {
+      setToPrice(priceOverrides[assetKey]);
+      setToType('target');
       return;
     }
 
@@ -57,14 +66,14 @@ export default function RotateAssetNode({ data, id }) {
 
     const timer = setTimeout(async () => {
       setIsFetchingPrice(true);
-      const { price, type } = await fetchPrice(toAsset.toUpperCase().trim());
+      const { price, type } = await fetchPrice(assetKey);
       setToPrice(price);
       setToType(type);
       setIsFetchingPrice(false);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [toAsset, isInitialized, savedInputs?.toPrice]);
+  }, [toAsset, isInitialized, savedInputs?.toPrice, priceOverrides]);
 
   // Save inputs when they change
   useEffect(() => {
@@ -175,8 +184,8 @@ export default function RotateAssetNode({ data, id }) {
             <div className="text-xs text-zinc-500 mt-1">Fetching price...</div>
           )}
           {toPrice !== null && !isFetchingPrice && (
-            <div className="text-xs text-zinc-500 mt-1">
-              Price: ${formatPrice(toPrice)} ({toType})
+            <div className={`text-xs mt-1 ${toType === 'target' ? 'text-cyan-600 dark:text-cyan-400' : 'text-zinc-500'}`}>
+              Price: ${formatPrice(toPrice)} {toType === 'target' ? '(from target)' : `(${toType})`}
             </div>
           )}
           {toAsset && toPrice === null && !isFetchingPrice && (
@@ -191,6 +200,37 @@ export default function RotateAssetNode({ data, id }) {
             </div>
           </div>
         )}
+
+        {/* Chain buttons */}
+        <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3 mt-3">
+          <div className="text-xs text-zinc-500 mb-2">Chain another action:</div>
+          <div className="flex flex-wrap gap-1">
+            <button
+              onClick={() => onAddChainedNode?.(id, 'rotate')}
+              className="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded text-xs hover:bg-orange-200 dark:hover:bg-orange-900/50"
+            >
+              + Rotate
+            </button>
+            <button
+              onClick={() => onAddChainedNode?.(id, 'sell')}
+              className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-xs hover:bg-red-200 dark:hover:bg-red-900/50"
+            >
+              + Sell
+            </button>
+            <button
+              onClick={() => onAddChainedNode?.(id, 'buy')}
+              className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded text-xs hover:bg-green-200 dark:hover:bg-green-900/50"
+            >
+              + Buy
+            </button>
+            <button
+              onClick={() => onAddChainedNode?.(id, 'priceTarget')}
+              className="px-2 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400 rounded text-xs hover:bg-cyan-200 dark:hover:bg-cyan-900/50"
+            >
+              + Target
+            </button>
+          </div>
+        </div>
       </div>
 
       <Handle

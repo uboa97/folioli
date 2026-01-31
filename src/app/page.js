@@ -407,16 +407,277 @@ export default function Home() {
     }
   }, [onNodesChange, setEdges, setNodes, getActionNodesForPortfolio]);
 
+  // Helper to check if a node is an action node
+  const isActionNode = useCallback((nodeId) => {
+    return nodeId.startsWith('rotate-') ||
+           nodeId.startsWith('sell-') ||
+           nodeId.startsWith('buy-') ||
+           nodeId.startsWith('priceTarget-');
+  }, []);
+
+  // Helper to get source portfolio ID for an action node (walks back through chain)
+  const getSourcePortfolioForAction = useCallback((actionNodeId) => {
+    let currentId = actionNodeId;
+    const visited = new Set();
+
+    while (currentId && !visited.has(currentId)) {
+      visited.add(currentId);
+      const edge = edges.find(e => e.target === currentId);
+      if (!edge) return null;
+
+      if (edge.source.startsWith('portfolio-')) {
+        return edge.source;
+      }
+      // Walk back through the chain
+      currentId = edge.source;
+    }
+    return null;
+  }, [edges]);
+
+  // Get ordered chain of action nodes starting from a portfolio
+  const getOrderedChainNodes = useCallback((portfolioId) => {
+    const chains = [];
+
+    // Find all direct connections from portfolio to action nodes
+    const firstLevelEdges = edges.filter(e =>
+      e.source === portfolioId && isActionNode(e.target)
+    );
+
+    for (const startEdge of firstLevelEdges) {
+      const chain = [startEdge.target];
+      let currentId = startEdge.target;
+      const visited = new Set([currentId]);
+
+      // Follow the chain
+      while (true) {
+        const nextEdge = edges.find(e =>
+          e.source === currentId && isActionNode(e.target)
+        );
+        if (!nextEdge || visited.has(nextEdge.target)) break;
+        chain.push(nextEdge.target);
+        visited.add(nextEdge.target);
+        currentId = nextEdge.target;
+      }
+
+      chains.push(chain);
+    }
+
+    return chains;
+  }, [edges, isActionNode]);
+
+  // Get price overrides from price target nodes that come before a specific node in the chain
+  const getPriceOverridesUpTo = useCallback((portfolioId, stopBeforeNodeId) => {
+    const chains = getOrderedChainNodes(portfolioId);
+    const priceOverrides = {};
+
+    // Find which chain contains the stopBeforeNodeId
+    let targetChain = null;
+    let stopIndex = -1;
+    for (const chain of chains) {
+      const idx = chain.indexOf(stopBeforeNodeId);
+      if (idx !== -1) {
+        targetChain = chain;
+        stopIndex = idx;
+        break;
+      }
+    }
+
+    if (!targetChain || stopIndex <= 0) {
+      return priceOverrides;
+    }
+
+    // Collect price overrides from nodes before stopIndex
+    for (let i = 0; i < stopIndex; i++) {
+      const nodeId = targetChain[i];
+      if (nodeId.startsWith('priceTarget-')) {
+        const pt = priceTargets[nodeId];
+        if (pt && pt.asset && pt.targetPrice) {
+          priceOverrides[pt.asset] = pt.targetPrice;
+        }
+      }
+    }
+
+    return priceOverrides;
+  }, [getOrderedChainNodes, priceTargets]);
+
+  // Compute holdings after applying transformations up to (but not including) a specific node
+  const computeHoldingsUpTo = useCallback((portfolioId, stopBeforeNodeId) => {
+    const baseHoldings = portfolioHoldings[portfolioId] || [];
+    const chains = getOrderedChainNodes(portfolioId);
+
+    // Find which chain contains the stopBeforeNodeId
+    let targetChain = null;
+    let stopIndex = -1;
+    for (const chain of chains) {
+      const idx = chain.indexOf(stopBeforeNodeId);
+      if (idx !== -1) {
+        targetChain = chain;
+        stopIndex = idx;
+        break;
+      }
+    }
+
+    if (!targetChain || stopIndex <= 0) {
+      // Node is first in chain or not found, return base holdings
+      return baseHoldings.map(h => ({ ...h }));
+    }
+
+    // Apply transformations from nodes before stopIndex
+    const projected = baseHoldings.map(h => ({ ...h }));
+    let totalCash = 0;
+
+    // First pass: apply price targets
+    for (let i = 0; i < stopIndex; i++) {
+      const nodeId = targetChain[i];
+      if (nodeId.startsWith('priceTarget-')) {
+        const pt = priceTargets[nodeId];
+        if (pt && pt.asset && pt.targetPrice) {
+          const holdingIdx = projected.findIndex(h => h.ticker === pt.asset);
+          if (holdingIdx !== -1) {
+            projected[holdingIdx].price = pt.targetPrice;
+            projected[holdingIdx].value = pt.targetPrice * projected[holdingIdx].amount;
+          }
+        }
+      }
+    }
+
+    // Second pass: apply rotations, sells, buys
+    for (let i = 0; i < stopIndex; i++) {
+      const nodeId = targetChain[i];
+
+      if (nodeId.startsWith('rotate-')) {
+        const rotation = rotations[nodeId];
+        if (rotation) {
+          const { fromAsset, sellAmount, toAsset, toPrice, toType, buyAmount } = rotation;
+
+          const fromIndex = projected.findIndex(h => h.ticker === fromAsset);
+          if (fromIndex !== -1) {
+            projected[fromIndex].amount -= sellAmount;
+            projected[fromIndex].value = projected[fromIndex].amount * (projected[fromIndex].price || 0);
+            if (projected[fromIndex].amount <= 0.000001) {
+              projected.splice(fromIndex, 1);
+            }
+          }
+
+          const toIndex = projected.findIndex(h => h.ticker === toAsset);
+          if (toIndex !== -1) {
+            projected[toIndex].amount += buyAmount;
+            projected[toIndex].value = projected[toIndex].amount * (projected[toIndex].price || 0);
+          } else {
+            projected.push({
+              ticker: toAsset,
+              amount: buyAmount,
+              price: toPrice,
+              type: toType,
+              value: buyAmount * toPrice,
+            });
+          }
+        }
+      }
+
+      if (nodeId.startsWith('sell-')) {
+        const sell = sells[nodeId];
+        if (sell) {
+          const { fromAsset, sellAmount, sellValue } = sell;
+
+          const fromIndex = projected.findIndex(h => h.ticker === fromAsset);
+          if (fromIndex !== -1) {
+            projected[fromIndex].amount -= sellAmount;
+            projected[fromIndex].value = projected[fromIndex].amount * (projected[fromIndex].price || 0);
+            if (projected[fromIndex].amount <= 0.000001) {
+              projected.splice(fromIndex, 1);
+            }
+          }
+
+          totalCash += sellValue;
+        }
+      }
+
+      if (nodeId.startsWith('buy-')) {
+        const buy = buys[nodeId];
+        if (buy) {
+          const { cashAmount, toAsset, toPrice, toType, buyAmount } = buy;
+
+          totalCash -= cashAmount;
+
+          const toIndex = projected.findIndex(h => h.ticker === toAsset);
+          if (toIndex !== -1) {
+            projected[toIndex].amount += buyAmount;
+            projected[toIndex].value = projected[toIndex].amount * (projected[toIndex].price || 0);
+          } else {
+            projected.push({
+              ticker: toAsset,
+              amount: buyAmount,
+              price: toPrice,
+              type: toType,
+              value: buyAmount * toPrice,
+            });
+          }
+        }
+      }
+    }
+
+    // Add/update cash position if any
+    if (totalCash !== 0) {
+      const cashIndex = projected.findIndex(h => h.ticker === 'USD');
+      if (cashIndex !== -1) {
+        projected[cashIndex].amount += totalCash;
+        projected[cashIndex].value = projected[cashIndex].amount;
+        if (projected[cashIndex].amount <= 0.000001) {
+          projected.splice(cashIndex, 1);
+        }
+      } else if (totalCash > 0) {
+        projected.push({
+          ticker: 'USD',
+          amount: totalCash,
+          price: 1,
+          type: 'cash',
+          value: totalCash,
+        });
+      }
+    }
+
+    return projected;
+  }, [portfolioHoldings, getOrderedChainNodes, priceTargets, rotations, sells, buys]);
+
   // Helper to remove an action node and clean up its portfolio's projected node if needed
   const removeActionNode = useCallback((nodeId, cleanupState) => {
     // Find which portfolio this action node belongs to
-    let sourcePortfolioId = null;
+    const sourcePortfolioId = getSourcePortfolioForAction(nodeId);
+
     setEdges(prevEdges => {
-      const sourceEdge = prevEdges.find(e => e.target === nodeId && e.source.startsWith('portfolio-'));
-      if (sourceEdge) {
-        sourcePortfolioId = sourceEdge.source;
+      // Find the incoming edge (what connects to this node)
+      const incomingEdge = prevEdges.find(e => e.target === nodeId);
+      // Find the outgoing edge (what this node connects to)
+      const outgoingEdge = prevEdges.find(e => e.source === nodeId);
+
+      // Remove edges to/from this node
+      let newEdges = prevEdges.filter(edge => edge.source !== nodeId && edge.target !== nodeId);
+
+      // If both incoming and outgoing exist, create a new edge to maintain the chain
+      // But only if the outgoing target is an action node (not projected)
+      if (incomingEdge && outgoingEdge && isActionNode(outgoingEdge.target)) {
+        const newEdgeId = `edge-${incomingEdge.source}-${outgoingEdge.target}`;
+        // Only add if this edge doesn't already exist
+        if (!newEdges.some(e => e.id === newEdgeId)) {
+          // Determine edge color based on source node type
+          let edgeColor = '#3b82f6'; // default blue
+          if (incomingEdge.source.startsWith('rotate-')) edgeColor = '#f97316';
+          else if (incomingEdge.source.startsWith('sell-')) edgeColor = '#ef4444';
+          else if (incomingEdge.source.startsWith('buy-')) edgeColor = '#22c55e';
+          else if (incomingEdge.source.startsWith('priceTarget-')) edgeColor = '#06b6d4';
+
+          newEdges.push({
+            id: newEdgeId,
+            source: incomingEdge.source,
+            target: outgoingEdge.target,
+            markerEnd: { type: MarkerType.ArrowClosed },
+            style: { stroke: edgeColor },
+          });
+        }
       }
-      return prevEdges.filter(edge => edge.source !== nodeId && edge.target !== nodeId);
+
+      return newEdges;
     });
 
     setNodes(prev => prev.filter(n => n.id !== nodeId));
@@ -443,7 +704,7 @@ export default function Home() {
         });
       }, 0);
     }
-  }, [setNodes, setEdges, getActionNodesForPortfolio]);
+  }, [setNodes, setEdges, getActionNodesForPortfolio, getSourcePortfolioForAction, isActionNode]);
 
   // Remove a rotation node
   const handleRemoveRotation = useCallback((nodeId) => {
@@ -910,24 +1171,98 @@ export default function Home() {
     });
   }, [nodes, edges, priceTargetCount, projectedCount, projectedForPortfolio, setNodes, setEdges, ensureProjectedNodeForPortfolio]);
 
+  // Add a chained node after an existing action node
+  const handleAddChainedNode = useCallback((sourceNodeId, nodeType) => {
+    // Find the source portfolio for this chain
+    const portfolioId = getSourcePortfolioForAction(sourceNodeId);
+    if (!portfolioId) return;
+
+    const sourceNode = nodes.find(n => n.id === sourceNodeId);
+    const sourcePos = sourceNode?.position || { x: 500, y: 150 };
+
+    // Find the projected node for this portfolio
+    const projectedId = projectedForPortfolio[portfolioId];
+    if (!projectedId) return;
+
+    let newNodeId;
+    let newNodeType;
+    let edgeColor;
+
+    if (nodeType === 'rotate') {
+      newNodeId = `rotate-${rotationCount + 1}`;
+      setRotationCount(prev => prev + 1);
+      newNodeType = 'rotate';
+      edgeColor = '#f97316';
+    } else if (nodeType === 'sell') {
+      newNodeId = `sell-${sellCount + 1}`;
+      setSellCount(prev => prev + 1);
+      newNodeType = 'sell';
+      edgeColor = '#ef4444';
+    } else if (nodeType === 'buy') {
+      newNodeId = `buy-${buyCount + 1}`;
+      setBuyCount(prev => prev + 1);
+      newNodeType = 'buy';
+      edgeColor = '#22c55e';
+    } else if (nodeType === 'priceTarget') {
+      newNodeId = `priceTarget-${priceTargetCount + 1}`;
+      setPriceTargetCount(prev => prev + 1);
+      newNodeType = 'priceTarget';
+      edgeColor = '#06b6d4';
+    } else {
+      return;
+    }
+
+    // Add the new node
+    setNodes(prev => [
+      ...prev,
+      {
+        id: newNodeId,
+        type: newNodeType,
+        position: { x: sourcePos.x + 350, y: sourcePos.y },
+        data: { sourcePortfolioId: portfolioId },
+      },
+    ]);
+
+    // Update edges: remove source->projected, add source->new, add new->projected
+    setEdges(prev => {
+      // Remove the edge from source to projected
+      const filtered = prev.filter(e =>
+        !(e.source === sourceNodeId && e.target === projectedId)
+      );
+
+      // Add edge from source to new node
+      filtered.push({
+        id: `edge-${sourceNodeId}-${newNodeId}`,
+        source: sourceNodeId,
+        target: newNodeId,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: edgeColor },
+      });
+
+      // Add edge from new node to projected
+      filtered.push({
+        id: `edge-${newNodeId}-${projectedId}`,
+        source: newNodeId,
+        target: projectedId,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: edgeColor },
+      });
+
+      return filtered;
+    });
+  }, [nodes, projectedForPortfolio, getSourcePortfolioForAction, rotationCount, sellCount, buyCount, priceTargetCount, setNodes, setEdges]);
+
   // Calculate projected holdings for a specific portfolio
   const calculateProjectedHoldings = useCallback((portfolioId) => {
     const holdings = portfolioHoldings[portfolioId] || [];
+    const chains = getOrderedChainNodes(portfolioId);
 
-    // Find action nodes connected to this portfolio
-    const connectedActionIds = edges
-      .filter(e => e.source === portfolioId)
-      .map(e => e.target)
-      .filter(id =>
-        id.startsWith('rotate-') ||
-        id.startsWith('sell-') ||
-        id.startsWith('buy-') ||
-        id.startsWith('priceTarget-')
-      );
+    // Flatten all chains into a single list of action node IDs
+    const allActionNodes = chains.flat();
 
-    // Build a map of price overrides from price targets connected to this portfolio
+    // Build a map of price overrides from all price targets in chains
     const priceOverrides = {};
-    connectedActionIds.forEach(actionId => {
+    allActionNodes.forEach(actionId => {
       if (actionId.startsWith('priceTarget-')) {
         const pt = priceTargets[actionId];
         if (pt && pt.asset && pt.targetPrice) {
@@ -951,85 +1286,81 @@ export default function Home() {
 
     let totalCash = 0;
 
-    // Apply rotations connected to this portfolio
-    connectedActionIds.forEach(actionId => {
-      if (actionId.startsWith('rotate-')) {
-        const rotation = rotations[actionId];
-        if (!rotation) return;
+    // Apply transformations in chain order
+    for (const chain of chains) {
+      for (const actionId of chain) {
+        if (actionId.startsWith('rotate-')) {
+          const rotation = rotations[actionId];
+          if (!rotation) continue;
 
-        const { fromAsset, sellAmount, toAsset, toPrice, toType, buyAmount } = rotation;
+          const { fromAsset, sellAmount, toAsset, toPrice, toType, buyAmount } = rotation;
 
-        const fromIndex = projected.findIndex(h => h.ticker === fromAsset);
-        if (fromIndex !== -1) {
-          projected[fromIndex].amount -= sellAmount;
-          projected[fromIndex].value = projected[fromIndex].amount * (projected[fromIndex].price || 0);
-          if (projected[fromIndex].amount <= 0.000001) {
-            projected.splice(fromIndex, 1);
+          const fromIndex = projected.findIndex(h => h.ticker === fromAsset);
+          if (fromIndex !== -1) {
+            projected[fromIndex].amount -= sellAmount;
+            projected[fromIndex].value = projected[fromIndex].amount * (projected[fromIndex].price || 0);
+            if (projected[fromIndex].amount <= 0.000001) {
+              projected.splice(fromIndex, 1);
+            }
+          }
+
+          const toIndex = projected.findIndex(h => h.ticker === toAsset);
+          if (toIndex !== -1) {
+            projected[toIndex].amount += buyAmount;
+            projected[toIndex].value = projected[toIndex].amount * (projected[toIndex].price || 0);
+          } else {
+            projected.push({
+              ticker: toAsset,
+              amount: buyAmount,
+              price: toPrice,
+              type: toType,
+              value: buyAmount * toPrice,
+            });
           }
         }
 
-        const toIndex = projected.findIndex(h => h.ticker === toAsset);
-        if (toIndex !== -1) {
-          projected[toIndex].amount += buyAmount;
-          projected[toIndex].value = projected[toIndex].amount * (projected[toIndex].price || 0);
-        } else {
-          projected.push({
-            ticker: toAsset,
-            amount: buyAmount,
-            price: toPrice,
-            type: toType,
-            value: buyAmount * toPrice,
-          });
+        if (actionId.startsWith('sell-')) {
+          const sell = sells[actionId];
+          if (!sell) continue;
+
+          const { fromAsset, sellAmount, sellValue } = sell;
+
+          const fromIndex = projected.findIndex(h => h.ticker === fromAsset);
+          if (fromIndex !== -1) {
+            projected[fromIndex].amount -= sellAmount;
+            projected[fromIndex].value = projected[fromIndex].amount * (projected[fromIndex].price || 0);
+            if (projected[fromIndex].amount <= 0.000001) {
+              projected.splice(fromIndex, 1);
+            }
+          }
+
+          totalCash += sellValue;
         }
-      }
-    });
 
-    // Apply sells connected to this portfolio
-    connectedActionIds.forEach(actionId => {
-      if (actionId.startsWith('sell-')) {
-        const sell = sells[actionId];
-        if (!sell) return;
+        if (actionId.startsWith('buy-')) {
+          const buy = buys[actionId];
+          if (!buy) continue;
 
-        const { fromAsset, sellAmount, sellValue } = sell;
+          const { cashAmount, toAsset, toPrice, toType, buyAmount } = buy;
 
-        const fromIndex = projected.findIndex(h => h.ticker === fromAsset);
-        if (fromIndex !== -1) {
-          projected[fromIndex].amount -= sellAmount;
-          projected[fromIndex].value = projected[fromIndex].amount * (projected[fromIndex].price || 0);
-          if (projected[fromIndex].amount <= 0.000001) {
-            projected.splice(fromIndex, 1);
+          totalCash -= cashAmount;
+
+          const toIndex = projected.findIndex(h => h.ticker === toAsset);
+          if (toIndex !== -1) {
+            projected[toIndex].amount += buyAmount;
+            projected[toIndex].value = projected[toIndex].amount * (projected[toIndex].price || 0);
+          } else {
+            projected.push({
+              ticker: toAsset,
+              amount: buyAmount,
+              price: toPrice,
+              type: toType,
+              value: buyAmount * toPrice,
+            });
           }
         }
-
-        totalCash += sellValue;
       }
-    });
-
-    // Apply buys connected to this portfolio
-    connectedActionIds.forEach(actionId => {
-      if (actionId.startsWith('buy-')) {
-        const buy = buys[actionId];
-        if (!buy) return;
-
-        const { cashAmount, toAsset, toPrice, toType, buyAmount } = buy;
-
-        totalCash -= cashAmount;
-
-        const toIndex = projected.findIndex(h => h.ticker === toAsset);
-        if (toIndex !== -1) {
-          projected[toIndex].amount += buyAmount;
-          projected[toIndex].value = projected[toIndex].amount * (projected[toIndex].price || 0);
-        } else {
-          projected.push({
-            ticker: toAsset,
-            amount: buyAmount,
-            price: toPrice,
-            type: toType,
-            value: buyAmount * toPrice,
-          });
-        }
-      }
-    });
+    }
 
     // Add/update cash position if any
     if (totalCash !== 0) {
@@ -1052,13 +1383,7 @@ export default function Home() {
     }
 
     return projected.sort((a, b) => (b.value || 0) - (a.value || 0));
-  }, [portfolioHoldings, edges, rotations, sells, buys, priceTargets]);
-
-  // Helper to get source portfolio ID for an action node
-  const getSourcePortfolioForAction = useCallback((actionNodeId) => {
-    const edge = edges.find(e => e.target === actionNodeId && e.source.startsWith('portfolio-'));
-    return edge?.source || null;
-  }, [edges]);
+  }, [portfolioHoldings, getOrderedChainNodes, rotations, sells, buys, priceTargets]);
 
   // Inject data and callbacks into nodes
   const nodesWithData = useMemo(() => {
@@ -1084,22 +1409,26 @@ export default function Home() {
       }
       if (node.type === 'rotate') {
         const sourcePortfolioId = getSourcePortfolioForAction(node.id);
-        const holdings = sourcePortfolioId ? (portfolioHoldings[sourcePortfolioId] || []) : [];
+        // Compute holdings after previous nodes in chain have been applied
+        const holdings = sourcePortfolioId ? computeHoldingsUpTo(sourcePortfolioId, node.id) : [];
+        const priceOverrides = sourcePortfolioId ? getPriceOverridesUpTo(sourcePortfolioId, node.id) : {};
         return {
           ...node,
           data: {
             ...node.data,
             holdings,
+            priceOverrides,
             savedInputs: rotationInputs[node.id],
             onRotationChange: handleRotationChange,
             onInputChange: handleRotationInputChange,
             onRemove: handleRemoveRotation,
+            onAddChainedNode: handleAddChainedNode,
           },
         };
       }
       if (node.type === 'sell') {
         const sourcePortfolioId = getSourcePortfolioForAction(node.id);
-        const holdings = sourcePortfolioId ? (portfolioHoldings[sourcePortfolioId] || []) : [];
+        const holdings = sourcePortfolioId ? computeHoldingsUpTo(sourcePortfolioId, node.id) : [];
         return {
           ...node,
           data: {
@@ -1109,24 +1438,31 @@ export default function Home() {
             onSellChange: handleSellChange,
             onInputChange: handleSellInputChange,
             onRemove: handleRemoveSell,
+            onAddChainedNode: handleAddChainedNode,
           },
         };
       }
       if (node.type === 'buy') {
+        const sourcePortfolioId = getSourcePortfolioForAction(node.id);
+        const holdings = sourcePortfolioId ? computeHoldingsUpTo(sourcePortfolioId, node.id) : [];
+        const priceOverrides = sourcePortfolioId ? getPriceOverridesUpTo(sourcePortfolioId, node.id) : {};
         return {
           ...node,
           data: {
             ...node.data,
+            holdings,
+            priceOverrides,
             savedInputs: buyInputs[node.id],
             onBuyChange: handleBuyChange,
             onInputChange: handleBuyInputChange,
             onRemove: handleRemoveBuy,
+            onAddChainedNode: handleAddChainedNode,
           },
         };
       }
       if (node.type === 'priceTarget') {
         const sourcePortfolioId = getSourcePortfolioForAction(node.id);
-        const holdings = sourcePortfolioId ? (portfolioHoldings[sourcePortfolioId] || []) : [];
+        const holdings = sourcePortfolioId ? computeHoldingsUpTo(sourcePortfolioId, node.id) : [];
         return {
           ...node,
           data: {
@@ -1136,6 +1472,7 @@ export default function Home() {
             onPriceTargetChange: handlePriceTargetChange,
             onInputChange: handlePriceTargetInputChange,
             onRemove: handleRemovePriceTarget,
+            onAddChainedNode: handleAddChainedNode,
           },
         };
       }
@@ -1157,7 +1494,47 @@ export default function Home() {
       }
       return node;
     });
-  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotationInputs, sellInputs, buyInputs, priceTargetInputs, calculateProjectedHoldings, getSourcePortfolioForAction, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget]);
+  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotationInputs, sellInputs, buyInputs, priceTargetInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAddChainedNode]);
+
+  // Deduplicate edges to prevent React key warnings
+  const uniqueEdges = useMemo(() => {
+    const seen = new Set();
+    return edges.filter(edge => {
+      if (seen.has(edge.id)) return false;
+      seen.add(edge.id);
+      return true;
+    });
+  }, [edges]);
+
+  // Handle manual edge connections
+  const handleConnect = useCallback((connection) => {
+    const { source, target } = connection;
+
+    // Determine edge color based on source node type
+    let edgeColor = '#3b82f6'; // default blue for portfolio
+    if (source.startsWith('rotate-')) edgeColor = '#f97316';
+    else if (source.startsWith('sell-')) edgeColor = '#ef4444';
+    else if (source.startsWith('buy-')) edgeColor = '#22c55e';
+    else if (source.startsWith('priceTarget-')) edgeColor = '#06b6d4';
+
+    const newEdgeId = `edge-${source}-${target}`;
+
+    setEdges(prev => {
+      // Don't add if edge already exists
+      if (prev.some(e => e.id === newEdgeId)) return prev;
+
+      return [
+        ...prev,
+        {
+          id: newEdgeId,
+          source,
+          target,
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: { stroke: edgeColor },
+        },
+      ];
+    });
+  }, [setEdges]);
 
   if (!isHydrated) {
     return (
@@ -1171,9 +1548,10 @@ export default function Home() {
     <div className="w-screen h-screen">
       <ReactFlow
         nodes={nodesWithData}
-        edges={edges}
+        edges={uniqueEdges}
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
+        onConnect={handleConnect}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.3 }}

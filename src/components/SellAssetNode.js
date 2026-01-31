@@ -15,7 +15,7 @@ function formatValue(value) {
 }
 
 export default function SellAssetNode({ data, id }) {
-  const { holdings = [], onSellChange, onInputChange, onRemove, savedInputs } = data;
+  const { holdings = [], onSellChange, onInputChange, onRemove, onAddChainedNode, savedInputs } = data;
   const onSellChangeRef = useRef(onSellChange);
   const onInputChangeRef = useRef(onInputChange);
   onSellChangeRef.current = onSellChange;
@@ -186,6 +186,37 @@ export default function SellAssetNode({ data, id }) {
             )}
           </>
         )}
+
+        {/* Chain buttons */}
+        <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3 mt-3">
+          <div className="text-xs text-zinc-500 mb-2">Chain another action:</div>
+          <div className="flex flex-wrap gap-1">
+            <button
+              onClick={() => onAddChainedNode?.(id, 'rotate')}
+              className="px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded text-xs hover:bg-orange-200 dark:hover:bg-orange-900/50"
+            >
+              + Rotate
+            </button>
+            <button
+              onClick={() => onAddChainedNode?.(id, 'sell')}
+              className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-xs hover:bg-red-200 dark:hover:bg-red-900/50"
+            >
+              + Sell
+            </button>
+            <button
+              onClick={() => onAddChainedNode?.(id, 'buy')}
+              className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded text-xs hover:bg-green-200 dark:hover:bg-green-900/50"
+            >
+              + Buy
+            </button>
+            <button
+              onClick={() => onAddChainedNode?.(id, 'priceTarget')}
+              className="px-2 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400 rounded text-xs hover:bg-cyan-200 dark:hover:bg-cyan-900/50"
+            >
+              + Target
+            </button>
+          </div>
+        </div>
       </div>
 
       <Handle
