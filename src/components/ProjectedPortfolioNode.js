@@ -16,7 +16,11 @@ function formatValue(value) {
 export default function ProjectedPortfolioNode({ data }) {
   const { projectedHoldings = [], originalHoldings = [] } = data;
 
-  const totalValue = projectedHoldings.reduce((sum, h) => sum + (h.value || 0), 0);
+  // For percentage calculations, treat negative USD as 0
+  const totalValue = projectedHoldings.reduce((sum, h) => {
+    if (h.ticker === 'USD' && h.value < 0) return sum;
+    return sum + (h.value || 0);
+  }, 0);
   const originalTotal = originalHoldings.reduce((sum, h) => sum + (h.value || 0), 0);
 
   const getChange = (ticker) => {
@@ -112,7 +116,9 @@ export default function ProjectedPortfolioNode({ data }) {
                 const originalPct = originalTotal > 0 && originalHolding
                   ? (originalHolding.value || 0) / originalTotal * 100
                   : 0;
-                const newPct = totalValue > 0 ? (holding.value || 0) / totalValue * 100 : 0;
+                // Show 0% for negative USD (cash spent)
+                const holdingValue = holding.ticker === 'USD' && holding.value < 0 ? 0 : (holding.value || 0);
+                const newPct = totalValue > 0 ? holdingValue / totalValue * 100 : 0;
                 const pctChange = newPct - originalPct;
 
                 return (
@@ -127,11 +133,9 @@ export default function ProjectedPortfolioNode({ data }) {
                     <span className="w-16 text-right text-zinc-600 dark:text-zinc-400">
                       {newPct.toFixed(1)}%
                     </span>
-                    {Math.abs(pctChange) > 0.1 && (
-                      <span className={`w-14 text-right ${pctChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {pctChange > 0 ? '+' : ''}{pctChange.toFixed(1)}%
-                      </span>
-                    )}
+                    <span className={`w-14 text-right ${Math.abs(pctChange) > 0.1 ? (pctChange > 0 ? 'text-green-600' : 'text-red-600') : 'text-transparent'}`}>
+                      {Math.abs(pctChange) > 0.1 ? `${pctChange > 0 ? '+' : ''}${pctChange.toFixed(1)}%` : '—'}
+                    </span>
                   </div>
                 );
               })}
