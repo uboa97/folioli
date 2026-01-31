@@ -22,13 +22,21 @@ export default function SellAssetNode({ data, id }) {
   onInputChangeRef.current = onInputChange;
 
   const [fromAsset, setFromAsset] = useState(savedInputs?.fromAsset || '');
-  const [sellAmount, setSellAmount] = useState(savedInputs?.sellAmount || '');
+  const [inputMode, setInputMode] = useState(savedInputs?.inputMode || 'units'); // 'units' or 'usd'
+  const [inputValue, setInputValue] = useState(savedInputs?.inputValue || '');
   const [isInitialized, setIsInitialized] = useState(false);
 
   const selectedHolding = holdings.find(h => h.ticker === fromAsset);
-  const sellValue = selectedHolding && sellAmount
-    ? parseFloat(sellAmount) * (selectedHolding.price || 0)
-    : 0;
+  const assetPrice = selectedHolding?.price || 0;
+
+  // Calculate derived values based on input mode
+  const sellAmount = inputMode === 'units'
+    ? (inputValue ? parseFloat(inputValue) : 0)
+    : (inputValue && assetPrice ? parseFloat(inputValue) / assetPrice : 0);
+
+  const sellValue = inputMode === 'usd'
+    ? (inputValue ? parseFloat(inputValue) : 0)
+    : (inputValue && assetPrice ? parseFloat(inputValue) * assetPrice : 0);
 
   // Mark as initialized after first render
   useEffect(() => {
@@ -42,26 +50,27 @@ export default function SellAssetNode({ data, id }) {
     if (callback) {
       callback(id, {
         fromAsset,
-        sellAmount,
+        inputMode,
+        inputValue,
       });
     }
-  }, [isInitialized, id, fromAsset, sellAmount]);
+  }, [isInitialized, id, fromAsset, inputMode, inputValue]);
 
   // Notify parent of sell changes
   useEffect(() => {
     const callback = onSellChangeRef.current;
     if (!callback) return;
 
-    if (fromAsset && sellAmount && parseFloat(sellAmount) > 0 && selectedHolding?.price) {
+    if (fromAsset && inputValue && parseFloat(inputValue) > 0 && selectedHolding?.price && sellAmount > 0 && sellValue > 0) {
       callback(id, {
         fromAsset,
-        sellAmount: parseFloat(sellAmount),
+        sellAmount,
         sellValue,
       });
     } else {
       callback(id, null);
     }
-  }, [fromAsset, sellAmount, sellValue, selectedHolding?.price, id]);
+  }, [fromAsset, inputValue, sellAmount, sellValue, selectedHolding?.price, id]);
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[280px]">
@@ -89,7 +98,7 @@ export default function SellAssetNode({ data, id }) {
             value={fromAsset}
             onChange={(e) => {
               setFromAsset(e.target.value);
-              setSellAmount('');
+              setInputValue('');
             }}
             className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-red-500"
           >
@@ -103,28 +112,79 @@ export default function SellAssetNode({ data, id }) {
         </div>
 
         {fromAsset && selectedHolding && (
-          <div>
-            <label className="block text-xs text-zinc-500 mb-1">
-              Amount to Sell (max: {selectedHolding.amount})
-            </label>
-            <input
-              type="number"
-              value={sellAmount}
-              onChange={(e) => setSellAmount(e.target.value)}
-              max={selectedHolding.amount}
-              step="any"
-              className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-red-500"
-              placeholder="0"
-            />
-          </div>
-        )}
-
-        {sellValue > 0 && (
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2">
-            <div className="text-sm text-green-700 dark:text-green-400">
-              Cash received: <span className="font-semibold">${formatValue(sellValue)}</span>
+          <>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-zinc-500">
+                  Amount {inputMode === 'units' ? `(max: ${selectedHolding.amount})` : `(max: $${formatValue(selectedHolding.amount * assetPrice)})`}
+                </label>
+                <div className="flex text-xs">
+                  <button
+                    onClick={() => {
+                      if (inputMode !== 'units') {
+                        // Convert USD to units when switching
+                        if (inputValue && assetPrice) {
+                          setInputValue(String(parseFloat(inputValue) / assetPrice));
+                        }
+                        setInputMode('units');
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded-l border ${
+                      inputMode === 'units'
+                        ? 'bg-red-500 text-white border-red-500'
+                        : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-600'
+                    }`}
+                  >
+                    Units
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (inputMode !== 'usd') {
+                        // Convert units to USD when switching
+                        if (inputValue && assetPrice) {
+                          setInputValue(String(parseFloat(inputValue) * assetPrice));
+                        }
+                        setInputMode('usd');
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded-r border-t border-r border-b ${
+                      inputMode === 'usd'
+                        ? 'bg-red-500 text-white border-red-500'
+                        : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-600'
+                    }`}
+                  >
+                    USD
+                  </button>
+                </div>
+              </div>
+              <div className="relative">
+                {inputMode === 'usd' && (
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
+                )}
+                <input
+                  type="number"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  max={inputMode === 'units' ? selectedHolding.amount : selectedHolding.amount * assetPrice}
+                  step="any"
+                  className={`w-full ${inputMode === 'usd' ? 'pl-6' : 'pl-2'} pr-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-red-500`}
+                  placeholder={inputMode === 'usd' ? '0.00' : '0'}
+                />
+              </div>
             </div>
-          </div>
+
+            {inputValue && parseFloat(inputValue) > 0 && sellValue > 0 && (
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
+                <div className="text-sm text-green-700 dark:text-green-400">
+                  {inputMode === 'units' ? (
+                    <>Cash received: <span className="font-semibold">${formatValue(sellValue)}</span></>
+                  ) : (
+                    <>Sell: <span className="font-semibold">{sellAmount.toFixed(6)} {fromAsset}</span></>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

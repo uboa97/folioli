@@ -22,14 +22,22 @@ export default function BuyAssetNode({ data, id }) {
   onBuyChangeRef.current = onBuyChange;
   onInputChangeRef.current = onInputChange;
 
-  const [cashAmount, setCashAmount] = useState(savedInputs?.cashAmount || '');
+  const [inputMode, setInputMode] = useState(savedInputs?.inputMode || 'usd'); // 'usd' or 'units'
+  const [inputValue, setInputValue] = useState(savedInputs?.inputValue || '');
   const [toAsset, setToAsset] = useState(savedInputs?.toAsset || '');
   const [toPrice, setToPrice] = useState(savedInputs?.toPrice ?? null);
   const [toType, setToType] = useState(savedInputs?.toType ?? null);
   const [isFetchingPrice, setIsFetchingPrice] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const buyAmount = toPrice && cashAmount ? parseFloat(cashAmount) / toPrice : 0;
+  // Calculate derived values based on input mode
+  const cashAmount = inputMode === 'usd'
+    ? (inputValue ? parseFloat(inputValue) : 0)
+    : (inputValue && toPrice ? parseFloat(inputValue) * toPrice : 0);
+
+  const buyAmount = inputMode === 'units'
+    ? (inputValue ? parseFloat(inputValue) : 0)
+    : (inputValue && toPrice ? parseFloat(inputValue) / toPrice : 0);
 
   // Mark as initialized after first render
   useEffect(() => {
@@ -66,22 +74,23 @@ export default function BuyAssetNode({ data, id }) {
     const callback = onInputChangeRef.current;
     if (callback) {
       callback(id, {
-        cashAmount,
+        inputMode,
+        inputValue,
         toAsset,
         toPrice,
         toType,
       });
     }
-  }, [isInitialized, id, cashAmount, toAsset, toPrice, toType]);
+  }, [isInitialized, id, inputMode, inputValue, toAsset, toPrice, toType]);
 
   // Notify parent of buy changes
   useEffect(() => {
     const callback = onBuyChangeRef.current;
     if (!callback) return;
 
-    if (cashAmount && parseFloat(cashAmount) > 0 && toAsset.trim() && toPrice) {
+    if (inputValue && parseFloat(inputValue) > 0 && toAsset.trim() && toPrice && cashAmount > 0 && buyAmount > 0) {
       callback(id, {
-        cashAmount: parseFloat(cashAmount),
+        cashAmount,
         toAsset: toAsset.toUpperCase().trim(),
         toPrice,
         toType,
@@ -90,7 +99,7 @@ export default function BuyAssetNode({ data, id }) {
     } else {
       callback(id, null);
     }
-  }, [cashAmount, toAsset, toPrice, toType, buyAmount, id]);
+  }, [inputValue, toAsset, toPrice, toType, cashAmount, buyAmount, id]);
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[280px]">
@@ -113,21 +122,6 @@ export default function BuyAssetNode({ data, id }) {
 
       <div className="p-4 space-y-3">
         <div>
-          <label className="block text-xs text-zinc-500 mb-1">Cash Amount (USD)</label>
-          <div className="relative">
-            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
-            <input
-              type="number"
-              value={cashAmount}
-              onChange={(e) => setCashAmount(e.target.value)}
-              step="any"
-              className="w-full pl-6 pr-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="0.00"
-            />
-          </div>
-        </div>
-
-        <div>
           <label className="block text-xs text-zinc-500 mb-1">Buy Asset (ticker)</label>
           <input
             type="text"
@@ -149,12 +143,77 @@ export default function BuyAssetNode({ data, id }) {
           )}
         </div>
 
-        {cashAmount && parseFloat(cashAmount) > 0 && toPrice && buyAmount > 0 && (
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2">
-            <div className="text-sm text-green-700 dark:text-green-400">
-              Receive: <span className="font-semibold">{buyAmount.toFixed(6)} {toAsset.toUpperCase()}</span>
+        {toAsset && toPrice && (
+          <>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-zinc-500">Amount</label>
+                <div className="flex text-xs">
+                  <button
+                    onClick={() => {
+                      if (inputMode !== 'usd') {
+                        // Convert units to USD when switching
+                        if (inputValue && toPrice) {
+                          setInputValue(String(parseFloat(inputValue) * toPrice));
+                        }
+                        setInputMode('usd');
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded-l border ${
+                      inputMode === 'usd'
+                        ? 'bg-green-500 text-white border-green-500'
+                        : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-600'
+                    }`}
+                  >
+                    USD
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (inputMode !== 'units') {
+                        // Convert USD to units when switching
+                        if (inputValue && toPrice) {
+                          setInputValue(String(parseFloat(inputValue) / toPrice));
+                        }
+                        setInputMode('units');
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded-r border-t border-r border-b ${
+                      inputMode === 'units'
+                        ? 'bg-green-500 text-white border-green-500'
+                        : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-600'
+                    }`}
+                  >
+                    Units
+                  </button>
+                </div>
+              </div>
+              <div className="relative">
+                {inputMode === 'usd' && (
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
+                )}
+                <input
+                  type="number"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  step="any"
+                  className={`w-full ${inputMode === 'usd' ? 'pl-6' : 'pl-2'} pr-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-green-500`}
+                  placeholder={inputMode === 'usd' ? '0.00' : '0'}
+                />
+              </div>
             </div>
-          </div>
+
+            {inputValue && parseFloat(inputValue) > 0 && buyAmount > 0 && (
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
+                <div className="text-sm text-green-700 dark:text-green-400">
+                  {inputMode === 'usd' ? (
+                    <>Receive: <span className="font-semibold">{buyAmount.toFixed(6)} {toAsset.toUpperCase()}</span></>
+                  ) : (
+                    <>Cost: <span className="font-semibold">${formatValue(cashAmount)}</span></>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
