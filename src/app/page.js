@@ -623,10 +623,10 @@ export default function Home() {
       if (cashIndex !== -1) {
         projected[cashIndex].amount += totalCash;
         projected[cashIndex].value = projected[cashIndex].amount;
-        if (projected[cashIndex].amount <= 0.000001) {
+        if (Math.abs(projected[cashIndex].amount) <= 0.000001) {
           projected.splice(cashIndex, 1);
         }
-      } else if (totalCash > 0) {
+      } else {
         projected.push({
           ticker: 'USD',
           amount: totalCash,
@@ -1368,10 +1368,10 @@ export default function Home() {
       if (cashIndex !== -1) {
         projected[cashIndex].amount += totalCash;
         projected[cashIndex].value = projected[cashIndex].amount;
-        if (projected[cashIndex].amount <= 0.000001) {
+        if (Math.abs(projected[cashIndex].amount) <= 0.000001) {
           projected.splice(cashIndex, 1);
         }
-      } else if (totalCash > 0) {
+      } else {
         projected.push({
           ticker: 'USD',
           amount: totalCash,

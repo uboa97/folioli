@@ -80,18 +80,18 @@ export default function ProjectedPortfolioNode({ data }) {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <div className="text-zinc-600 dark:text-zinc-400">
-                        {holding.amount.toFixed(holding.amount < 1 ? 6 : 4)}
+                      <div className={holding.amount < 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-600 dark:text-zinc-400'}>
+                        {holding.amount < 0 ? '' : ''}{holding.amount.toFixed(Math.abs(holding.amount) < 1 ? 6 : 4)}
                       </div>
-                      {holding.price !== null && (
+                      {holding.price !== null && holding.ticker !== 'USD' && (
                         <div className="text-xs text-zinc-500">
                           @ ${formatPrice(holding.price)}
                         </div>
                       )}
                     </div>
                     {holding.value !== null && (
-                      <div className="font-medium text-purple-600 dark:text-purple-400 min-w-[80px] text-right">
-                        ${formatValue(holding.value)}
+                      <div className={`font-medium min-w-[80px] text-right ${holding.value < 0 ? 'text-red-600 dark:text-red-400' : 'text-purple-600 dark:text-purple-400'}`}>
+                        {holding.value < 0 ? '-$' : '$'}{formatValue(Math.abs(holding.value))}
                       </div>
                     )}
                   </div>
