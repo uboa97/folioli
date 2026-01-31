@@ -32,12 +32,13 @@ export default function PortfolioNode({ data, id }) {
     setNewTicker('');
     setNewAmount('');
 
-    const { price, type } = await fetchPrice(ticker);
+    const { price, marketCap, type } = await fetchPrice(ticker);
 
     const newHolding = {
       ticker,
       amount,
       price,
+      marketCap,
       type,
       value: price ? price * amount : null,
     };

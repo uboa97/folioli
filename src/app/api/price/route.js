@@ -1,3 +1,7 @@
+import YahooFinance from 'yahoo-finance2';
+
+const yf = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+
 const COINGECKO_API = 'https://api.coingecko.com/api/v3';
 
 const CRYPTO_IDS = {
@@ -72,33 +76,36 @@ const CRYPTO_IDS = {
   KCS: 'kucoin-shares',
 };
 
-async function fetchCryptoPrice(symbol) {
+async function fetchCryptoData(symbol) {
   const id = CRYPTO_IDS[symbol.toUpperCase()];
   if (!id) return null;
 
   try {
     const res = await fetch(
-      `${COINGECKO_API}/simple/price?ids=${id}&vs_currencies=usd`,
+      `${COINGECKO_API}/simple/price?ids=${id}&vs_currencies=usd&include_market_cap=true`,
       { next: { revalidate: 60 } }
     );
     if (!res.ok) return null;
     const data = await res.json();
-    return data[id]?.usd ?? null;
+    return {
+      price: data[id]?.usd ?? null,
+      marketCap: data[id]?.usd_market_cap ?? null,
+    };
   } catch {
     return null;
   }
 }
 
-async function fetchStockPrice(symbol) {
+async function fetchStockData(symbol) {
   try {
-    const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`,
-      { next: { revalidate: 60 } }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const price = data.chart?.result?.[0]?.meta?.regularMarketPrice;
-    return price ?? null;
+    const result = await yf.quoteSummary(symbol, {
+      modules: ['price', 'summaryDetail']
+    });
+
+    const price = result.price?.regularMarketPrice ?? null;
+    const marketCap = result.price?.marketCap ?? null;
+
+    return { price, marketCap };
   } catch {
     return null;
   }
@@ -113,16 +120,24 @@ export async function GET(request) {
   }
 
   // Try crypto first
-  const cryptoPrice = await fetchCryptoPrice(symbol);
-  if (cryptoPrice !== null) {
-    return Response.json({ price: cryptoPrice, type: 'crypto' });
+  const cryptoData = await fetchCryptoData(symbol);
+  if (cryptoData && cryptoData.price !== null) {
+    return Response.json({
+      price: cryptoData.price,
+      marketCap: cryptoData.marketCap,
+      type: 'crypto'
+    });
   }
 
   // Fall back to stock
-  const stockPrice = await fetchStockPrice(symbol);
-  if (stockPrice !== null) {
-    return Response.json({ price: stockPrice, type: 'stock' });
+  const stockData = await fetchStockData(symbol);
+  if (stockData && stockData.price !== null) {
+    return Response.json({
+      price: stockData.price,
+      marketCap: stockData.marketCap,
+      type: 'stock'
+    });
   }
 
-  return Response.json({ price: null, type: 'unknown' });
+  return Response.json({ price: null, marketCap: null, type: 'unknown' });
 }

@@ -93,10 +93,11 @@ export default function Home() {
       holdingsToRefresh.map(async (holding) => {
         // Don't refresh USD/CASH
         if (holding.ticker === 'USD' || holding.ticker === 'CASH') return holding;
-        const { price, type } = await fetchPrice(holding.ticker);
+        const { price, marketCap, type } = await fetchPrice(holding.ticker);
         return {
           ...holding,
           price: price ?? holding.price,
+          marketCap: marketCap ?? holding.marketCap,
           type: type !== 'unknown' ? type : holding.type,
           value: price ? price * holding.amount : holding.value,
         };

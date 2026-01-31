@@ -10,6 +10,36 @@ function formatPrice(price) {
   return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 }
 
+function formatMarketCap(marketCap) {
+  if (marketCap >= 1e12) {
+    return `$${(marketCap / 1e12).toFixed(2)}T`;
+  }
+  if (marketCap >= 1e9) {
+    return `$${(marketCap / 1e9).toFixed(2)}B`;
+  }
+  if (marketCap >= 1e6) {
+    return `$${(marketCap / 1e6).toFixed(2)}M`;
+  }
+  return `$${marketCap.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+}
+
+function parseMarketCapInput(value) {
+  if (!value) return null;
+  const str = value.toString().toUpperCase().trim();
+
+  // Handle T (trillion), B (billion), M (million) suffixes
+  const match = str.match(/^([\d.]+)\s*([TBM])?$/);
+  if (!match) return parseFloat(str) || null;
+
+  const num = parseFloat(match[1]);
+  const suffix = match[2];
+
+  if (suffix === 'T') return num * 1e12;
+  if (suffix === 'B') return num * 1e9;
+  if (suffix === 'M') return num * 1e6;
+  return num;
+}
+
 function formatPercent(current, target) {
   if (!current || !target) return null;
   const change = ((target - current) / current) * 100;
@@ -24,12 +54,28 @@ export default function PriceTargetNode({ data, id }) {
   onInputChangeRef.current = onInputChange;
 
   const [asset, setAsset] = useState(savedInputs?.asset || '');
-  const [targetPrice, setTargetPrice] = useState(savedInputs?.targetPrice || '');
+  const [targetMode, setTargetMode] = useState(savedInputs?.targetMode || 'price'); // 'price' or 'marketCap'
+  // Support old format (targetPrice) and new format (targetValue)
+  const [targetValue, setTargetValue] = useState(savedInputs?.targetValue || savedInputs?.targetPrice || '');
   const [isInitialized, setIsInitialized] = useState(false);
 
   const selectedHolding = holdings.find(h => h.ticker === asset);
   const currentPrice = selectedHolding?.price;
-  const percentChange = formatPercent(currentPrice, parseFloat(targetPrice));
+  const currentMarketCap = selectedHolding?.marketCap;
+
+  // Calculate target price based on mode
+  let targetPrice = null;
+  if (targetMode === 'price' && targetValue) {
+    targetPrice = parseFloat(targetValue);
+  } else if (targetMode === 'marketCap' && targetValue && currentPrice && currentMarketCap) {
+    const targetMcap = parseMarketCapInput(targetValue);
+    if (targetMcap) {
+      // Price changes proportionally with market cap
+      targetPrice = currentPrice * (targetMcap / currentMarketCap);
+    }
+  }
+
+  const percentChange = formatPercent(currentPrice, targetPrice);
 
   // Mark as initialized after first render
   useEffect(() => {
@@ -43,20 +89,21 @@ export default function PriceTargetNode({ data, id }) {
     if (callback) {
       callback(id, {
         asset,
-        targetPrice,
+        targetMode,
+        targetValue,
       });
     }
-  }, [isInitialized, id, asset, targetPrice]);
+  }, [isInitialized, id, asset, targetMode, targetValue]);
 
   // Notify parent of price target changes
   useEffect(() => {
     const callback = onPriceTargetChangeRef.current;
     if (!callback) return;
 
-    if (asset && targetPrice && parseFloat(targetPrice) > 0) {
+    if (asset && targetPrice && targetPrice > 0) {
       callback(id, {
         asset,
-        targetPrice: parseFloat(targetPrice),
+        targetPrice,
         currentPrice,
       });
     } else {
@@ -90,14 +137,14 @@ export default function PriceTargetNode({ data, id }) {
             value={asset}
             onChange={(e) => {
               setAsset(e.target.value);
-              setTargetPrice('');
+              setTargetValue('');
             }}
             className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
           >
             <option value="">Select asset...</option>
             {holdings.filter(h => h.ticker !== 'USD').map((h) => (
               <option key={h.ticker} value={h.ticker}>
-                {h.ticker} (current: ${h.price ? formatPrice(h.price) : 'N/A'})
+                {h.ticker} (${h.price ? formatPrice(h.price) : 'N/A'})
               </option>
             ))}
           </select>
@@ -106,23 +153,76 @@ export default function PriceTargetNode({ data, id }) {
         {asset && selectedHolding && (
           <>
             <div>
-              <label className="block text-xs text-zinc-500 mb-1">Target Price</label>
-              <div className="relative">
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
-                <input
-                  type="number"
-                  value={targetPrice}
-                  onChange={(e) => setTargetPrice(e.target.value)}
-                  step="any"
-                  className="w-full pl-6 pr-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  placeholder={currentPrice ? formatPrice(currentPrice) : '0.00'}
-                />
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-zinc-500">Target</label>
+                <div className="flex text-xs">
+                  <button
+                    onClick={() => {
+                      if (targetMode !== 'price') {
+                        setTargetMode('price');
+                        setTargetValue('');
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded-l border ${
+                      targetMode === 'price'
+                        ? 'bg-cyan-500 text-white border-cyan-500'
+                        : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-600'
+                    }`}
+                  >
+                    Price
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (targetMode !== 'marketCap') {
+                        setTargetMode('marketCap');
+                        setTargetValue('');
+                      }
+                    }}
+                    className={`px-2 py-0.5 rounded-r border-t border-r border-b ${
+                      targetMode === 'marketCap'
+                        ? 'bg-cyan-500 text-white border-cyan-500'
+                        : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-600'
+                    }`}
+                  >
+                    Mkt Cap
+                  </button>
+                </div>
               </div>
-              {currentPrice && (
-                <div className="text-xs text-zinc-500 mt-1">
-                  Current: ${formatPrice(currentPrice)}
+
+              {targetMode === 'price' ? (
+                <div className="relative">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
+                  <input
+                    type="number"
+                    value={targetValue}
+                    onChange={(e) => setTargetValue(e.target.value)}
+                    step="any"
+                    className="w-full pl-6 pr-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    placeholder={currentPrice ? formatPrice(currentPrice) : '0.00'}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <input
+                    type="text"
+                    value={targetValue}
+                    onChange={(e) => setTargetValue(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    placeholder="e.g. 100B, 1.5T, 500M"
+                  />
+                  <div className="text-xs text-zinc-400 mt-1">
+                    Use B (billion), M (million), T (trillion)
+                  </div>
                 </div>
               )}
+
+              <div className="text-xs text-zinc-500 mt-1">
+                {targetMode === 'price' ? (
+                  <>Current: ${currentPrice ? formatPrice(currentPrice) : 'N/A'}</>
+                ) : (
+                  <>Current: {currentMarketCap ? formatMarketCap(currentMarketCap) : 'N/A'}</>
+                )}
+              </div>
             </div>
 
             {percentChange !== null && targetPrice && (
@@ -130,11 +230,22 @@ export default function PriceTargetNode({ data, id }) {
                 <div className={`text-sm ${percentChange >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
                   {percentChange >= 0 ? '+' : ''}{percentChange.toFixed(2)}% from current
                 </div>
-                {selectedHolding.amount && (
+                {targetMode === 'marketCap' && (
                   <div className={`text-xs mt-1 ${percentChange >= 0 ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500'}`}>
-                    Position value: ${formatPrice(selectedHolding.amount * parseFloat(targetPrice))}
+                    Price at target: ${formatPrice(targetPrice)}
                   </div>
                 )}
+                {selectedHolding.amount && (
+                  <div className={`text-xs mt-1 ${percentChange >= 0 ? 'text-green-600 dark:text-green-500' : 'text-red-600 dark:text-red-500'}`}>
+                    Position value: ${formatPrice(selectedHolding.amount * targetPrice)}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {targetMode === 'marketCap' && !currentMarketCap && (
+              <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-2">
+                Market cap data not available for this asset
               </div>
             )}
           </>
