@@ -1506,6 +1506,37 @@ export default function Home() {
     });
   }, [edges]);
 
+  // Clear all state and reset to initial blank portfolio
+  const handleClearAll = useCallback(() => {
+    if (!confirm('Are you sure you want to clear everything? This cannot be undone.')) {
+      return;
+    }
+
+    setNodes([{
+      id: INITIAL_PORTFOLIO_ID,
+      type: 'portfolio',
+      position: { x: 100, y: 150 },
+      data: {},
+    }]);
+    setEdges([]);
+    setPortfolioHoldings({ [INITIAL_PORTFOLIO_ID]: [] });
+    setPortfolioCount(1);
+    setRotations({});
+    setRotationInputs({});
+    setRotationCount(0);
+    setSells({});
+    setSellInputs({});
+    setSellCount(0);
+    setBuys({});
+    setBuyInputs({});
+    setBuyCount(0);
+    setPriceTargets({});
+    setPriceTargetInputs({});
+    setPriceTargetCount(0);
+    setProjectedForPortfolio({});
+    setProjectedCount(0);
+  }, [setNodes, setEdges]);
+
   // Handle manual edge connections
   const handleConnect = useCallback((connection) => {
     const { source, target } = connection;
@@ -1561,6 +1592,14 @@ export default function Home() {
       >
         <Background color="#2d2d2d" gap={20} size={1} />
         <Controls />
+        <div className="absolute top-4 right-4 z-10">
+          <button
+            onClick={handleClearAll}
+            className="px-3 py-1.5 bg-zinc-700 hover:bg-red-600 text-white text-sm rounded shadow-lg transition-colors"
+          >
+            Clear All
+          </button>
+        </div>
       </ReactFlow>
     </div>
   );
