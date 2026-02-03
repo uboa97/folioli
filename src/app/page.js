@@ -82,29 +82,120 @@ export default function Home() {
   const [priceTargetCount, setPriceTargetCount] = useState(0);
   const [projectedForPortfolio, setProjectedForPortfolio] = useState({});
   const [projectedCount, setProjectedCount] = useState(0);
+  const [isRefreshingAll, setIsRefreshingAll] = useState(false);
 
   const isInitialMount = useRef(true);
 
-  // Refresh prices for all holdings
-  const refreshPrices = useCallback(async (holdingsToRefresh) => {
-    if (!holdingsToRefresh || holdingsToRefresh.length === 0) return holdingsToRefresh;
+  // Global refresh all prices across the app (optimized to fetch each ticker only once)
+  const handleRefreshAll = useCallback(async () => {
+    setIsRefreshingAll(true);
 
-    const refreshed = await Promise.all(
-      holdingsToRefresh.map(async (holding) => {
-        // Don't refresh USD/CASH
-        if (holding.ticker === 'USD' || holding.ticker === 'CASH') return holding;
-        const { price, marketCap, type } = await fetchPrice(holding.ticker);
-        return {
-          ...holding,
-          price: price ?? holding.price,
-          marketCap: marketCap ?? holding.marketCap,
-          type: type !== 'unknown' ? type : holding.type,
-          value: price ? price * holding.amount : holding.value,
-        };
-      })
-    );
-    return refreshed;
-  }, []);
+    try {
+      // Collect all unique tickers that need price refresh
+      const tickersToFetch = new Set();
+
+      // From all portfolio holdings
+      for (const holdingsList of Object.values(portfolioHoldings)) {
+        if (holdingsList) {
+          for (const holding of holdingsList) {
+            if (holding.ticker !== 'USD' && holding.ticker !== 'CASH') {
+              tickersToFetch.add(holding.ticker);
+            }
+          }
+        }
+      }
+
+      // From rotation inputs (target assets)
+      for (const inputs of Object.values(rotationInputs)) {
+        if (inputs.toAsset) {
+          tickersToFetch.add(inputs.toAsset);
+        }
+      }
+
+      // From buy inputs (target assets)
+      for (const inputs of Object.values(buyInputs)) {
+        if (inputs.toAsset) {
+          tickersToFetch.add(inputs.toAsset);
+        }
+      }
+
+      // Fetch all unique tickers in parallel
+      const tickerArray = Array.from(tickersToFetch);
+      const priceResults = await Promise.all(
+        tickerArray.map(ticker => fetchPrice(ticker))
+      );
+
+      // Build a price map for quick lookup
+      const priceMap = {};
+      tickerArray.forEach((ticker, index) => {
+        priceMap[ticker] = priceResults[index];
+      });
+
+      // Update all portfolio holdings with cached prices
+      const refreshedPortfolios = {};
+      for (const [portfolioId, holdingsList] of Object.entries(portfolioHoldings)) {
+        if (holdingsList && holdingsList.length > 0) {
+          refreshedPortfolios[portfolioId] = holdingsList.map(holding => {
+            if (holding.ticker === 'USD' || holding.ticker === 'CASH') {
+              return holding;
+            }
+            const priceData = priceMap[holding.ticker];
+            if (priceData) {
+              return {
+                ...holding,
+                price: priceData.price ?? holding.price,
+                marketCap: priceData.marketCap ?? holding.marketCap,
+                type: priceData.type !== 'unknown' ? priceData.type : holding.type,
+                value: priceData.price ? priceData.price * holding.amount : holding.value,
+              };
+            }
+            return holding;
+          });
+        } else {
+          refreshedPortfolios[portfolioId] = holdingsList;
+        }
+      }
+      setPortfolioHoldings(refreshedPortfolios);
+
+      // Update rotation inputs with cached prices
+      if (Object.keys(rotationInputs).length > 0) {
+        const refreshedRotationInputs = {};
+        for (const [nodeId, inputs] of Object.entries(rotationInputs)) {
+          if (inputs.toAsset && priceMap[inputs.toAsset]) {
+            const priceData = priceMap[inputs.toAsset];
+            refreshedRotationInputs[nodeId] = {
+              ...inputs,
+              toPrice: priceData.price ?? inputs.toPrice,
+              toType: priceData.type !== 'unknown' ? priceData.type : inputs.toType,
+            };
+          } else {
+            refreshedRotationInputs[nodeId] = inputs;
+          }
+        }
+        setRotationInputs(refreshedRotationInputs);
+      }
+
+      // Update buy inputs with cached prices
+      if (Object.keys(buyInputs).length > 0) {
+        const refreshedBuyInputs = {};
+        for (const [nodeId, inputs] of Object.entries(buyInputs)) {
+          if (inputs.toAsset && priceMap[inputs.toAsset]) {
+            const priceData = priceMap[inputs.toAsset];
+            refreshedBuyInputs[nodeId] = {
+              ...inputs,
+              toPrice: priceData.price ?? inputs.toPrice,
+              toType: priceData.type !== 'unknown' ? priceData.type : inputs.toType,
+            };
+          } else {
+            refreshedBuyInputs[nodeId] = inputs;
+          }
+        }
+        setBuyInputs(refreshedBuyInputs);
+      }
+    } finally {
+      setIsRefreshingAll(false);
+    }
+  }, [portfolioHoldings, rotationInputs, buyInputs]);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -140,54 +231,116 @@ export default function Home() {
 
         setIsHydrated(true);
 
-        // Refresh prices in background after initial render for all portfolios
+        // Refresh prices in background after initial render (optimized to fetch each ticker once)
         const holdingsToRefresh = saved.portfolioHoldings || (saved.holdings ? { [INITIAL_PORTFOLIO_ID]: saved.holdings } : null);
+
+        // Collect all unique tickers that need refresh
+        const tickersToFetch = new Set();
+
         if (holdingsToRefresh) {
-          const refreshedPortfolios = {};
-          for (const [portfolioId, holdingsList] of Object.entries(holdingsToRefresh)) {
-            if (holdingsList && holdingsList.length > 0) {
-              refreshedPortfolios[portfolioId] = await refreshPrices(holdingsList);
-            } else {
-              refreshedPortfolios[portfolioId] = holdingsList;
+          for (const holdingsList of Object.values(holdingsToRefresh)) {
+            if (holdingsList) {
+              for (const holding of holdingsList) {
+                if (holding.ticker !== 'USD' && holding.ticker !== 'CASH') {
+                  tickersToFetch.add(holding.ticker);
+                }
+              }
             }
           }
-          setPortfolioHoldings(refreshedPortfolios);
         }
 
-        // Refresh rotation input prices
-        if (saved.rotationInputs && Object.keys(saved.rotationInputs).length > 0) {
-          const refreshedInputs = {};
-          for (const [nodeId, inputs] of Object.entries(saved.rotationInputs)) {
+        if (saved.rotationInputs) {
+          for (const inputs of Object.values(saved.rotationInputs)) {
             if (inputs.toAsset) {
-              const { price, type } = await fetchPrice(inputs.toAsset);
-              refreshedInputs[nodeId] = {
-                ...inputs,
-                toPrice: price ?? inputs.toPrice,
-                toType: type !== 'unknown' ? type : inputs.toType,
-              };
-            } else {
-              refreshedInputs[nodeId] = inputs;
+              tickersToFetch.add(inputs.toAsset);
             }
           }
-          setRotationInputs(refreshedInputs);
         }
 
-        // Refresh buy input prices
-        if (saved.buyInputs && Object.keys(saved.buyInputs).length > 0) {
-          const refreshedBuyInputs = {};
-          for (const [nodeId, inputs] of Object.entries(saved.buyInputs)) {
+        if (saved.buyInputs) {
+          for (const inputs of Object.values(saved.buyInputs)) {
             if (inputs.toAsset) {
-              const { price, type } = await fetchPrice(inputs.toAsset);
-              refreshedBuyInputs[nodeId] = {
-                ...inputs,
-                toPrice: price ?? inputs.toPrice,
-                toType: type !== 'unknown' ? type : inputs.toType,
-              };
-            } else {
-              refreshedBuyInputs[nodeId] = inputs;
+              tickersToFetch.add(inputs.toAsset);
             }
           }
-          setBuyInputs(refreshedBuyInputs);
+        }
+
+        // Fetch all unique tickers in parallel
+        if (tickersToFetch.size > 0) {
+          const tickerArray = Array.from(tickersToFetch);
+          const priceResults = await Promise.all(
+            tickerArray.map(ticker => fetchPrice(ticker))
+          );
+
+          // Build price map
+          const priceMap = {};
+          tickerArray.forEach((ticker, index) => {
+            priceMap[ticker] = priceResults[index];
+          });
+
+          // Update portfolio holdings
+          if (holdingsToRefresh) {
+            const refreshedPortfolios = {};
+            for (const [portfolioId, holdingsList] of Object.entries(holdingsToRefresh)) {
+              if (holdingsList && holdingsList.length > 0) {
+                refreshedPortfolios[portfolioId] = holdingsList.map(holding => {
+                  if (holding.ticker === 'USD' || holding.ticker === 'CASH') {
+                    return holding;
+                  }
+                  const priceData = priceMap[holding.ticker];
+                  if (priceData) {
+                    return {
+                      ...holding,
+                      price: priceData.price ?? holding.price,
+                      marketCap: priceData.marketCap ?? holding.marketCap,
+                      type: priceData.type !== 'unknown' ? priceData.type : holding.type,
+                      value: priceData.price ? priceData.price * holding.amount : holding.value,
+                    };
+                  }
+                  return holding;
+                });
+              } else {
+                refreshedPortfolios[portfolioId] = holdingsList;
+              }
+            }
+            setPortfolioHoldings(refreshedPortfolios);
+          }
+
+          // Update rotation inputs
+          if (saved.rotationInputs && Object.keys(saved.rotationInputs).length > 0) {
+            const refreshedInputs = {};
+            for (const [nodeId, inputs] of Object.entries(saved.rotationInputs)) {
+              if (inputs.toAsset && priceMap[inputs.toAsset]) {
+                const priceData = priceMap[inputs.toAsset];
+                refreshedInputs[nodeId] = {
+                  ...inputs,
+                  toPrice: priceData.price ?? inputs.toPrice,
+                  toType: priceData.type !== 'unknown' ? priceData.type : inputs.toType,
+                };
+              } else {
+                refreshedInputs[nodeId] = inputs;
+              }
+            }
+            setRotationInputs(refreshedInputs);
+          }
+
+          // Update buy inputs
+          if (saved.buyInputs && Object.keys(saved.buyInputs).length > 0) {
+            const refreshedBuyInputs = {};
+            for (const [nodeId, inputs] of Object.entries(saved.buyInputs)) {
+              if (inputs.toAsset && priceMap[inputs.toAsset]) {
+                const priceData = priceMap[inputs.toAsset];
+                refreshedBuyInputs[nodeId] = {
+                  ...inputs,
+                  toPrice: priceData.price ?? inputs.toPrice,
+                  toType: priceData.type !== 'unknown' ? priceData.type : inputs.toType,
+                };
+              } else {
+                refreshedBuyInputs[nodeId] = inputs;
+              }
+            }
+            setBuyInputs(refreshedBuyInputs);
+          }
         }
       } else {
         setIsHydrated(true);
@@ -195,7 +348,7 @@ export default function Home() {
     };
 
     loadAndRefresh();
-  }, [setNodes, setEdges, refreshPrices]);
+  }, [setNodes, setEdges]);
 
   // Save state to localStorage when it changes
   useEffect(() => {
@@ -1592,6 +1745,16 @@ export default function Home() {
       >
         <Background color="#2d2d2d" gap={20} size={1} />
         <Controls />
+        <div className="absolute top-4 left-4 z-10">
+          <button
+            onClick={handleRefreshAll}
+            disabled={isRefreshingAll}
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white text-sm rounded shadow-lg transition-colors flex items-center gap-2"
+          >
+            <span className={isRefreshingAll ? 'animate-spin' : ''}>↻</span>
+            {isRefreshingAll ? 'Refreshing...' : 'Refresh Prices'}
+          </button>
+        </div>
         <div className="absolute top-4 right-4 z-10">
           <button
             onClick={handleClearAll}

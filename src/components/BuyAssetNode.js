@@ -29,6 +29,7 @@ export default function BuyAssetNode({ data, id }) {
   const [toType, setToType] = useState(savedInputs?.toType ?? null);
   const [isFetchingPrice, setIsFetchingPrice] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const lastSavedPriceRef = useRef(savedInputs?.toPrice);
 
   // Calculate derived values based on input mode
   const cashAmount = inputMode === 'usd'
@@ -43,6 +44,17 @@ export default function BuyAssetNode({ data, id }) {
   useEffect(() => {
     setIsInitialized(true);
   }, []);
+
+  // Sync price from savedInputs when it changes externally (e.g., global refresh)
+  useEffect(() => {
+    if (savedInputs?.toPrice !== undefined && savedInputs.toPrice !== lastSavedPriceRef.current) {
+      lastSavedPriceRef.current = savedInputs.toPrice;
+      setToPrice(savedInputs.toPrice);
+      if (savedInputs.toType) {
+        setToType(savedInputs.toType);
+      }
+    }
+  }, [savedInputs?.toPrice, savedInputs?.toType]);
 
   // Fetch price when toAsset changes (skip if there's a price override)
   useEffect(() => {
@@ -66,6 +78,11 @@ export default function BuyAssetNode({ data, id }) {
       return;
     }
 
+    // Skip fetch if the asset matches what's in savedInputs (already fetched by global refresh)
+    if (savedInputs?.toAsset?.toUpperCase() === assetKey && savedInputs?.toPrice !== undefined) {
+      return;
+    }
+
     const timer = setTimeout(async () => {
       setIsFetchingPrice(true);
       const { price, type } = await fetchPrice(assetKey);
@@ -75,7 +92,7 @@ export default function BuyAssetNode({ data, id }) {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [toAsset, isInitialized, savedInputs?.toPrice, priceOverrides]);
+  }, [toAsset, isInitialized, savedInputs?.toPrice, savedInputs?.toAsset, priceOverrides]);
 
   // Save inputs when they change
   useEffect(() => {
