@@ -137,6 +137,33 @@ export default function PortfolioNode({ data, id }) {
           )}
         </div>
 
+        {holdings.length > 0 && totalValue > 0 && (
+          <div className="mb-4 pt-3 border-t border-zinc-200 dark:border-zinc-700">
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-zinc-500">Allocation</span>
+            </div>
+            <div className="space-y-1">
+              {holdings.map((holding, index) => {
+                const pct = totalValue > 0 ? (holding.value || 0) / totalValue * 100 : 0;
+                return (
+                  <div key={index} className="flex items-center gap-2 text-xs">
+                    <span className="font-mono w-12">{holding.ticker}</span>
+                    <div className="flex-1 bg-zinc-200 dark:bg-zinc-700 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-blue-500 h-full transition-all"
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                    </div>
+                    <span className="w-12 text-right text-zinc-600 dark:text-zinc-400">
+                      {pct.toFixed(1)}%
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <input
             type="text"
