@@ -83,6 +83,7 @@ export default function Home() {
   const [projectedForPortfolio, setProjectedForPortfolio] = useState({});
   const [projectedCount, setProjectedCount] = useState(0);
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
+  const [showAddMenu, setShowAddMenu] = useState(false);
 
   const isInitialMount = useRef(true);
 
@@ -893,6 +894,33 @@ export default function Home() {
       [nodeId]: newHoldings,
     }));
   }, []);
+
+  // Create a new empty portfolio node
+  const handleAddNewPortfolio = useCallback(() => {
+    const newPortfolioId = `portfolio-${portfolioCount + 1}`;
+    setPortfolioCount(prev => prev + 1);
+
+    // Find a good position for the new portfolio (below existing ones)
+    const portfolioNodes = nodes.filter(n => n.type === 'portfolio');
+    const maxY = portfolioNodes.reduce((max, n) => Math.max(max, n.position.y), 0);
+
+    setNodes(prev => [
+      ...prev,
+      {
+        id: newPortfolioId,
+        type: 'portfolio',
+        position: { x: 100, y: maxY + 400 },
+        data: {},
+      },
+    ]);
+
+    setPortfolioHoldings(prev => ({
+      ...prev,
+      [newPortfolioId]: [],
+    }));
+
+    setShowAddMenu(false);
+  }, [portfolioCount, nodes, setNodes]);
 
   // Duplicate a portfolio node with its holdings
   const handleDuplicatePortfolio = useCallback((sourceNodeId) => {
@@ -1745,7 +1773,32 @@ export default function Home() {
       >
         <Background color="#2d2d2d" gap={20} size={1} />
         <Controls />
-        <div className="absolute top-4 left-4 z-10">
+        <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
+          <div className="relative">
+            <button
+              onClick={() => setShowAddMenu(prev => !prev)}
+              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded shadow-lg transition-colors flex items-center gap-1"
+            >
+              <span className="text-lg leading-none">+</span>
+            </button>
+            {showAddMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowAddMenu(false)}
+                />
+                <div className="absolute top-full left-0 mt-1 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded shadow-lg z-20 min-w-[160px]">
+                  <button
+                    onClick={handleAddNewPortfolio}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-2"
+                  >
+                    <span className="w-3 h-3 rounded bg-blue-500"></span>
+                    New Portfolio
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={handleRefreshAll}
             disabled={isRefreshingAll}
