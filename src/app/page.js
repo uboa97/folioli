@@ -125,6 +125,13 @@ export default function Home() {
         }
       }
 
+      // From all-in inputs (target assets)
+      for (const inputs of Object.values(allInInputs)) {
+        if (inputs.toAsset) {
+          tickersToFetch.add(inputs.toAsset);
+        }
+      }
+
       // Fetch all unique tickers in parallel
       const tickerArray = Array.from(tickersToFetch);
       const priceResults = await Promise.all(
@@ -198,10 +205,28 @@ export default function Home() {
         }
         setBuyInputs(refreshedBuyInputs);
       }
+
+      // Update all-in inputs with cached prices
+      if (Object.keys(allInInputs).length > 0) {
+        const refreshedAllInInputs = {};
+        for (const [nodeId, inputs] of Object.entries(allInInputs)) {
+          if (inputs.toAsset && priceMap[inputs.toAsset]) {
+            const priceData = priceMap[inputs.toAsset];
+            refreshedAllInInputs[nodeId] = {
+              ...inputs,
+              toPrice: priceData.price ?? inputs.toPrice,
+              toType: priceData.type !== 'unknown' ? priceData.type : inputs.toType,
+            };
+          } else {
+            refreshedAllInInputs[nodeId] = inputs;
+          }
+        }
+        setAllInInputs(refreshedAllInInputs);
+      }
     } finally {
       setIsRefreshingAll(false);
     }
-  }, [portfolioHoldings, rotationInputs, buyInputs]);
+  }, [portfolioHoldings, rotationInputs, buyInputs, allInInputs]);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -268,6 +293,14 @@ export default function Home() {
 
         if (saved.buyInputs) {
           for (const inputs of Object.values(saved.buyInputs)) {
+            if (inputs.toAsset) {
+              tickersToFetch.add(inputs.toAsset);
+            }
+          }
+        }
+
+        if (saved.allInInputs) {
+          for (const inputs of Object.values(saved.allInInputs)) {
             if (inputs.toAsset) {
               tickersToFetch.add(inputs.toAsset);
             }
@@ -349,6 +382,24 @@ export default function Home() {
               }
             }
             setBuyInputs(refreshedBuyInputs);
+          }
+
+          // Update all-in inputs
+          if (saved.allInInputs && Object.keys(saved.allInInputs).length > 0) {
+            const refreshedAllInInputs = {};
+            for (const [nodeId, inputs] of Object.entries(saved.allInInputs)) {
+              if (inputs.toAsset && priceMap[inputs.toAsset]) {
+                const priceData = priceMap[inputs.toAsset];
+                refreshedAllInInputs[nodeId] = {
+                  ...inputs,
+                  toPrice: priceData.price ?? inputs.toPrice,
+                  toType: priceData.type !== 'unknown' ? priceData.type : inputs.toType,
+                };
+              } else {
+                refreshedAllInInputs[nodeId] = inputs;
+              }
+            }
+            setAllInInputs(refreshedAllInInputs);
           }
         }
       } else {
