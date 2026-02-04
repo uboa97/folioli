@@ -987,17 +987,34 @@ export default function Home() {
 
   // Remove a portfolio node and all its connected nodes
   const handleRemovePortfolio = useCallback((portfolioId) => {
-    // Find all action nodes connected to this portfolio
-    const connectedActionIds = edges
-      .filter(e => e.source === portfolioId)
-      .map(e => e.target)
-      .filter(id =>
-        id.startsWith('rotate-') ||
-        id.startsWith('sell-') ||
-        id.startsWith('buy-') ||
-        id.startsWith('priceTarget-') ||
-        id.startsWith('allIn-')
-      );
+    // Find ALL action nodes in the chain (not just directly connected)
+    const allChainedActionIds = new Set();
+
+    const collectChainedNodes = (sourceId) => {
+      const directTargets = edges
+        .filter(e => e.source === sourceId)
+        .map(e => e.target)
+        .filter(id =>
+          id.startsWith('rotate-') ||
+          id.startsWith('sell-') ||
+          id.startsWith('buy-') ||
+          id.startsWith('priceTarget-') ||
+          id.startsWith('allIn-')
+        );
+
+      for (const targetId of directTargets) {
+        if (!allChainedActionIds.has(targetId)) {
+          allChainedActionIds.add(targetId);
+          // Recursively collect nodes chained from this one
+          collectChainedNodes(targetId);
+        }
+      }
+    };
+
+    // Start from the portfolio node
+    collectChainedNodes(portfolioId);
+
+    const connectedActionIds = Array.from(allChainedActionIds);
 
     // Get the projected node for this portfolio
     const projectedId = projectedForPortfolio[portfolioId];
