@@ -78,8 +78,8 @@ export default function BuyAssetNode({ data, id }) {
       return;
     }
 
-    // Skip fetch if the asset matches what's in savedInputs (already fetched by global refresh)
-    if (savedInputs?.toAsset?.toUpperCase() === assetKey && savedInputs?.toPrice !== undefined) {
+    // Skip fetch if the asset matches what's in savedInputs and has a valid price (already fetched by global refresh)
+    if (savedInputs?.toAsset?.toUpperCase() === assetKey && savedInputs?.toPrice != null) {
       return;
     }
 
