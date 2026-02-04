@@ -222,12 +222,20 @@ export default function PortfolioNode({ data, id }) {
                 + Target
               </button>
             </div>
-            <button
-              onClick={() => data.onAddAllIn?.(id)}
-              className="w-full px-2 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm font-medium"
-            >
-              + All-In
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => data.onAddAllIn?.(id)}
+                className="flex-1 px-2 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 text-sm font-medium"
+              >
+                + All-In
+              </button>
+              <button
+                onClick={() => data.onAddYield?.(id)}
+                className="flex-1 px-2 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm font-medium"
+              >
+                + Yield
+              </button>
+            </div>
           </div>
         )}
       </div>

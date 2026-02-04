@@ -276,6 +276,12 @@ export default function BuyAssetNode({ data, id }) {
             >
               + All-In
             </button>
+            <button
+              onClick={() => onAddChainedNode?.(id, 'yield')}
+              className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded text-xs hover:bg-purple-200 dark:hover:bg-purple-900/50"
+            >
+              + Yield
+            </button>
           </div>
         </div>
       </div>
