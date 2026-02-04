@@ -246,6 +246,12 @@ export default function RotateAssetNode({ data, id }) {
             >
               + Target
             </button>
+            <button
+              onClick={() => onAddChainedNode?.(id, 'allIn')}
+              className="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 rounded text-xs hover:bg-yellow-200 dark:hover:bg-yellow-900/50"
+            >
+              + All-In
+            </button>
           </div>
         </div>
       </div>
