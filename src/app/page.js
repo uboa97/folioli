@@ -888,6 +888,23 @@ export default function Home() {
           }
         }
       }
+
+      if (nodeId.startsWith('yield-')) {
+        const yieldData = yields[nodeId];
+        if (yieldData) {
+          const { asset, yieldType, yieldValue, yieldAmount } = yieldData;
+
+          if (yieldType === 'staking') {
+            const assetIndex = projected.findIndex(h => h.ticker === asset);
+            if (assetIndex !== -1) {
+              projected[assetIndex].amount += yieldAmount;
+              projected[assetIndex].value = projected[assetIndex].amount * (projected[assetIndex].price || 0);
+            }
+          } else {
+            totalCash += yieldValue;
+          }
+        }
+      }
     }
 
     // Add/update cash position if any
@@ -911,7 +928,7 @@ export default function Home() {
     }
 
     return projected;
-  }, [portfolioHoldings, getOrderedChainNodes, priceTargets, rotations, sells, buys]);
+  }, [portfolioHoldings, getOrderedChainNodes, priceTargets, rotations, sells, buys, yields]);
 
   // Helper to remove an action node and clean up its portfolio's projected node if needed
   const removeActionNode = useCallback((nodeId, cleanupState) => {
@@ -2077,7 +2094,7 @@ export default function Home() {
       }
       return node;
     });
-  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode]);
+  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode]);
 
   // Deduplicate edges to prevent React key warnings
   const uniqueEdges = useMemo(() => {
