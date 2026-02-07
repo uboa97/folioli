@@ -30,6 +30,7 @@ export default function RotateAssetNode({ data, id }) {
   const [isFetchingPrice, setIsFetchingPrice] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const lastSavedPriceRef = useRef(savedInputs?.toPrice);
+  const priceRequestIdRef = useRef(0);
 
   const selectedHolding = holdings.find(h => h.ticker === fromAsset);
   const sellValue = selectedHolding && sellAmount
@@ -56,6 +57,9 @@ export default function RotateAssetNode({ data, id }) {
 
   // Fetch price when toAsset changes (skip if we have saved price on init or if there's a price override)
   useEffect(() => {
+    const requestId = ++priceRequestIdRef.current;
+    setIsFetchingPrice(false);
+
     if (!toAsset.trim()) {
       setToPrice(null);
       setToType(null);
@@ -81,9 +85,14 @@ export default function RotateAssetNode({ data, id }) {
       return;
     }
 
+    // Prevent stale price from previous ticker from affecting derived quantity.
+    setToPrice(null);
+    setToType(null);
+
     const timer = setTimeout(async () => {
       setIsFetchingPrice(true);
       const { price, type } = await fetchPrice(assetKey);
+      if (requestId !== priceRequestIdRef.current) return;
       setToPrice(price);
       setToType(type);
       setIsFetchingPrice(false);
