@@ -177,9 +177,18 @@ export default function RotateAssetNode({ data, id }) {
 
         {fromAsset && selectedHolding && (
           <div>
-            <label className="block text-xs text-zinc-500 mb-1">
-              Amount to Sell (max: {selectedHolding.amount})
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs text-zinc-500">
+                Amount to Sell (max: {selectedHolding.amount})
+              </label>
+              <button
+                onClick={() => setSellAmount(String(selectedHolding.amount))}
+                className="px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                title="Use maximum amount"
+              >
+                Max
+              </button>
+            </div>
             <input
               type="number"
               value={sellAmount}

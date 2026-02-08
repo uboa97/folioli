@@ -76,6 +76,35 @@ const CRYPTO_IDS = {
   KCS: 'kucoin-shares',
 };
 
+function parseIsoDate(value) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(date.getTime())) return null;
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function formatIsoDateUTC(date) {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatCoinGeckoDateUTC(date) {
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const year = date.getUTCFullYear();
+  return `${day}-${month}-${year}`;
+}
+
 async function fetchCryptoData(symbol) {
   const id = CRYPTO_IDS[symbol.toUpperCase()];
   if (!id) return null;
@@ -90,6 +119,30 @@ async function fetchCryptoData(symbol) {
     return {
       price: data[id]?.usd ?? null,
       marketCap: data[id]?.usd_market_cap ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchCryptoHistoricalData(symbol, targetDate) {
+  const id = CRYPTO_IDS[symbol.toUpperCase()];
+  if (!id) return null;
+
+  try {
+    const dateParam = formatCoinGeckoDateUTC(targetDate);
+    const res = await fetch(
+      `${COINGECKO_API}/coins/${id}/history?date=${dateParam}&localization=false`,
+      { next: { revalidate: 3600 } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const price = data.market_data?.current_price?.usd ?? null;
+    if (price === null) return null;
+
+    return {
+      price,
+      resolvedDate: formatIsoDateUTC(targetDate),
     };
   } catch {
     return null;
@@ -111,12 +164,86 @@ async function fetchStockData(symbol) {
   }
 }
 
+async function fetchStockHistoricalData(symbol, targetDate) {
+  try {
+    const period1 = new Date(targetDate);
+    period1.setUTCDate(period1.getUTCDate() - 7);
+
+    const period2 = new Date(targetDate);
+    period2.setUTCDate(period2.getUTCDate() + 2);
+
+    const candles = await yf.historical(symbol, {
+      period1,
+      period2,
+      interval: '1d',
+    });
+
+    if (!candles || candles.length === 0) return null;
+
+    const validCandles = candles
+      .filter(candle => candle?.close !== undefined && candle?.close !== null && candle?.date)
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+    if (validCandles.length === 0) return null;
+
+    const targetIso = formatIsoDateUTC(targetDate);
+    const latestOnOrBeforeTarget = [...validCandles]
+      .reverse()
+      .find(candle => formatIsoDateUTC(candle.date) <= targetIso);
+
+    const selected = latestOnOrBeforeTarget || validCandles[0];
+
+    return {
+      price: selected.close,
+      resolvedDate: formatIsoDateUTC(selected.date),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const symbol = searchParams.get('symbol');
+  const dateParam = searchParams.get('date');
 
   if (!symbol) {
     return Response.json({ error: 'Symbol required' }, { status: 400 });
+  }
+
+  if (dateParam) {
+    const targetDate = parseIsoDate(dateParam);
+    if (!targetDate) {
+      return Response.json({ error: 'Invalid date format. Use YYYY-MM-DD.' }, { status: 400 });
+    }
+
+    const today = new Date();
+    const todayUtc = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+    if (targetDate.getTime() > todayUtc.getTime()) {
+      return Response.json({ error: 'Date cannot be in the future.' }, { status: 400 });
+    }
+
+    const cryptoHistoricalData = await fetchCryptoHistoricalData(symbol, targetDate);
+    if (cryptoHistoricalData) {
+      return Response.json({
+        price: cryptoHistoricalData.price,
+        marketCap: null,
+        type: 'crypto',
+        resolvedDate: cryptoHistoricalData.resolvedDate,
+      });
+    }
+
+    const stockHistoricalData = await fetchStockHistoricalData(symbol, targetDate);
+    if (stockHistoricalData) {
+      return Response.json({
+        price: stockHistoricalData.price,
+        marketCap: null,
+        type: 'stock',
+        resolvedDate: stockHistoricalData.resolvedDate,
+      });
+    }
+
+    return Response.json({ price: null, marketCap: null, type: 'unknown', resolvedDate: null });
   }
 
   // Try crypto first

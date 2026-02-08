@@ -118,43 +118,57 @@ export default function SellAssetNode({ data, id }) {
                 <label className="text-xs text-zinc-500">
                   Amount {inputMode === 'units' ? `(max: ${selectedHolding.amount})` : `(max: $${formatValue(selectedHolding.amount * assetPrice)})`}
                 </label>
-                <div className="flex text-xs">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
-                      if (inputMode !== 'units') {
-                        // Convert USD to units when switching
-                        if (inputValue && assetPrice) {
-                          setInputValue(String(parseFloat(inputValue) / assetPrice));
-                        }
-                        setInputMode('units');
-                      }
+                      const maxValue = inputMode === 'units'
+                        ? selectedHolding.amount
+                        : selectedHolding.amount * assetPrice;
+                      setInputValue(String(maxValue));
                     }}
-                    className={`px-2 py-0.5 rounded-l border ${
-                      inputMode === 'units'
-                        ? 'bg-red-500 text-white border-red-500'
-                        : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-600'
-                    }`}
+                    className="px-2 py-0.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                    title="Use maximum amount"
                   >
-                    Units
+                    Max
                   </button>
-                  <button
-                    onClick={() => {
-                      if (inputMode !== 'usd') {
-                        // Convert units to USD when switching
-                        if (inputValue && assetPrice) {
-                          setInputValue(String(parseFloat(inputValue) * assetPrice));
+                  <div className="flex text-xs">
+                    <button
+                      onClick={() => {
+                        if (inputMode !== 'units') {
+                          // Convert USD to units when switching
+                          if (inputValue && assetPrice) {
+                            setInputValue(String(parseFloat(inputValue) / assetPrice));
+                          }
+                          setInputMode('units');
                         }
-                        setInputMode('usd');
-                      }
-                    }}
-                    className={`px-2 py-0.5 rounded-r border-t border-r border-b ${
-                      inputMode === 'usd'
-                        ? 'bg-red-500 text-white border-red-500'
-                        : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-600'
-                    }`}
-                  >
-                    USD
-                  </button>
+                      }}
+                      className={`px-2 py-0.5 rounded-l border ${
+                        inputMode === 'units'
+                          ? 'bg-red-500 text-white border-red-500'
+                          : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-600'
+                      }`}
+                    >
+                      Units
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (inputMode !== 'usd') {
+                          // Convert units to USD when switching
+                          if (inputValue && assetPrice) {
+                            setInputValue(String(parseFloat(inputValue) * assetPrice));
+                          }
+                          setInputMode('usd');
+                        }
+                      }}
+                      className={`px-2 py-0.5 rounded-r border-t border-r border-b ${
+                        inputMode === 'usd'
+                          ? 'bg-red-500 text-white border-red-500'
+                          : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-600'
+                      }`}
+                    >
+                      USD
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="relative">
