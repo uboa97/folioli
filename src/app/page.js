@@ -19,6 +19,7 @@ import PriceTargetNode from '@/components/PriceTargetNode';
 import AllInNode from '@/components/AllInNode';
 import YieldNode from '@/components/YieldNode';
 import ProjectedPortfolioNode from '@/components/ProjectedPortfolioNode';
+import QuickConvertNode from '@/components/QuickConvertNode';
 import { fetchPrice } from '@/lib/fetchPrice';
 
 const nodeTypes = {
@@ -30,6 +31,7 @@ const nodeTypes = {
   allIn: AllInNode,
   yield: YieldNode,
   projected: ProjectedPortfolioNode,
+  quickConvert: QuickConvertNode,
 };
 
 const INITIAL_PORTFOLIO_ID = 'portfolio-1';
@@ -90,6 +92,8 @@ export default function Home() {
   const [yields, setYields] = useState({});
   const [yieldInputs, setYieldInputs] = useState({});
   const [yieldCount, setYieldCount] = useState(0);
+  const [quickConvertInputs, setQuickConvertInputs] = useState({});
+  const [quickConvertCount, setQuickConvertCount] = useState(0);
   const [projectedForPortfolio, setProjectedForPortfolio] = useState({});
   const [projectedCount, setProjectedCount] = useState(0);
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
@@ -133,6 +137,16 @@ export default function Home() {
       // From all-in inputs (target assets)
       for (const inputs of Object.values(allInInputs)) {
         if (inputs.toAsset) {
+          tickersToFetch.add(inputs.toAsset);
+        }
+      }
+
+      // From quick convert inputs
+      for (const inputs of Object.values(quickConvertInputs)) {
+        if (inputs.fromAsset && inputs.fromAsset !== 'USD' && inputs.fromAsset !== 'CASH') {
+          tickersToFetch.add(inputs.fromAsset);
+        }
+        if (inputs.toAsset && inputs.toAsset !== 'USD' && inputs.toAsset !== 'CASH') {
           tickersToFetch.add(inputs.toAsset);
         }
       }
@@ -228,10 +242,30 @@ export default function Home() {
         }
         setAllInInputs(refreshedAllInInputs);
       }
+
+      // Update quick convert inputs with cached prices
+      if (Object.keys(quickConvertInputs).length > 0) {
+        const refreshedQuickConvertInputs = {};
+        for (const [nodeId, inputs] of Object.entries(quickConvertInputs)) {
+          const refreshed = { ...inputs };
+          if (inputs.fromAsset && priceMap[inputs.fromAsset]) {
+            const fromPriceData = priceMap[inputs.fromAsset];
+            refreshed.fromPrice = fromPriceData.price ?? inputs.fromPrice;
+            refreshed.fromType = fromPriceData.type !== 'unknown' ? fromPriceData.type : inputs.fromType;
+          }
+          if (inputs.toAsset && priceMap[inputs.toAsset]) {
+            const toPriceData = priceMap[inputs.toAsset];
+            refreshed.toPrice = toPriceData.price ?? inputs.toPrice;
+            refreshed.toType = toPriceData.type !== 'unknown' ? toPriceData.type : inputs.toType;
+          }
+          refreshedQuickConvertInputs[nodeId] = refreshed;
+        }
+        setQuickConvertInputs(refreshedQuickConvertInputs);
+      }
     } finally {
       setIsRefreshingAll(false);
     }
-  }, [portfolioHoldings, rotationInputs, buyInputs, allInInputs]);
+  }, [portfolioHoldings, rotationInputs, buyInputs, allInInputs, quickConvertInputs]);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -246,6 +280,7 @@ export default function Home() {
         if (saved.priceTargetCount !== undefined) setPriceTargetCount(saved.priceTargetCount);
         if (saved.allInCount !== undefined) setAllInCount(saved.allInCount);
         if (saved.yieldCount !== undefined) setYieldCount(saved.yieldCount);
+        if (saved.quickConvertCount !== undefined) setQuickConvertCount(saved.quickConvertCount);
         if (saved.portfolioCount !== undefined) setPortfolioCount(saved.portfolioCount);
         if (saved.projectedForPortfolio) setProjectedForPortfolio(saved.projectedForPortfolio);
         if (saved.projectedCount !== undefined) setProjectedCount(saved.projectedCount);
@@ -270,6 +305,7 @@ export default function Home() {
         if (saved.allInInputs) setAllInInputs(saved.allInInputs);
         if (saved.yields) setYields(saved.yields);
         if (saved.yieldInputs) setYieldInputs(saved.yieldInputs);
+        if (saved.quickConvertInputs) setQuickConvertInputs(saved.quickConvertInputs);
 
         setIsHydrated(true);
 
@@ -310,6 +346,17 @@ export default function Home() {
         if (saved.allInInputs) {
           for (const inputs of Object.values(saved.allInInputs)) {
             if (inputs.toAsset) {
+              tickersToFetch.add(inputs.toAsset);
+            }
+          }
+        }
+
+        if (saved.quickConvertInputs) {
+          for (const inputs of Object.values(saved.quickConvertInputs)) {
+            if (inputs.fromAsset && inputs.fromAsset !== 'USD' && inputs.fromAsset !== 'CASH') {
+              tickersToFetch.add(inputs.fromAsset);
+            }
+            if (inputs.toAsset && inputs.toAsset !== 'USD' && inputs.toAsset !== 'CASH') {
               tickersToFetch.add(inputs.toAsset);
             }
           }
@@ -409,6 +456,26 @@ export default function Home() {
             }
             setAllInInputs(refreshedAllInInputs);
           }
+
+          // Update quick convert inputs
+          if (saved.quickConvertInputs && Object.keys(saved.quickConvertInputs).length > 0) {
+            const refreshedQuickConvertInputs = {};
+            for (const [nodeId, inputs] of Object.entries(saved.quickConvertInputs)) {
+              const refreshed = { ...inputs };
+              if (inputs.fromAsset && priceMap[inputs.fromAsset]) {
+                const fromPriceData = priceMap[inputs.fromAsset];
+                refreshed.fromPrice = fromPriceData.price ?? inputs.fromPrice;
+                refreshed.fromType = fromPriceData.type !== 'unknown' ? fromPriceData.type : inputs.fromType;
+              }
+              if (inputs.toAsset && priceMap[inputs.toAsset]) {
+                const toPriceData = priceMap[inputs.toAsset];
+                refreshed.toPrice = toPriceData.price ?? inputs.toPrice;
+                refreshed.toType = toPriceData.type !== 'unknown' ? toPriceData.type : inputs.toType;
+              }
+              refreshedQuickConvertInputs[nodeId] = refreshed;
+            }
+            setQuickConvertInputs(refreshedQuickConvertInputs);
+          }
         }
       } else {
         setIsHydrated(true);
@@ -458,10 +525,12 @@ export default function Home() {
       yields,
       yieldInputs,
       yieldCount,
+      quickConvertInputs,
+      quickConvertCount,
       projectedForPortfolio,
       projectedCount,
     });
-  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, projectedForPortfolio, projectedCount]);
+  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, projectedForPortfolio, projectedCount]);
 
   // Check if a specific portfolio should have a projected node (has any action nodes connected)
   const getActionNodesForPortfolio = useCallback((portfolioId, edgesList) => {
@@ -515,6 +584,11 @@ export default function Home() {
     // Check for deleted yield nodes
     const deletedYieldIds = changes
       .filter(change => change.type === 'remove' && change.id.startsWith('yield-'))
+      .map(change => change.id);
+
+    // Check for deleted quick convert nodes
+    const deletedQuickConvertIds = changes
+      .filter(change => change.type === 'remove' && change.id.startsWith('quickConvert-'))
       .map(change => change.id);
 
     if (deletedPortfolioIds.length > 0) {
@@ -636,6 +710,17 @@ export default function Home() {
       });
       setEdges(prev => prev.filter(edge =>
         !deletedYieldIds.includes(edge.source) && !deletedYieldIds.includes(edge.target)
+      ));
+    }
+
+    if (deletedQuickConvertIds.length > 0) {
+      setQuickConvertInputs(prev => {
+        const updated = { ...prev };
+        deletedQuickConvertIds.forEach(id => delete updated[id]);
+        return updated;
+      });
+      setEdges(prev => prev.filter(edge =>
+        !deletedQuickConvertIds.includes(edge.source) && !deletedQuickConvertIds.includes(edge.target)
       ));
     }
 
@@ -1058,6 +1143,27 @@ export default function Home() {
     setShowAddMenu(false);
   }, [portfolioCount, nodes, setNodes]);
 
+  const handleAddQuickConvert = useCallback(() => {
+    const newQuickConvertId = `quickConvert-${quickConvertCount + 1}`;
+    setQuickConvertCount(prev => prev + 1);
+
+    const existingQuickConverts = nodes.filter(n => n.type === 'quickConvert');
+    const maxY = existingQuickConverts.reduce((max, n) => Math.max(max, n.position.y), 0);
+    const baseY = existingQuickConverts.length > 0 ? maxY + 260 : 150;
+
+    setNodes(prev => [
+      ...prev,
+      {
+        id: newQuickConvertId,
+        type: 'quickConvert',
+        position: { x: 520, y: baseY },
+        data: {},
+      },
+    ]);
+
+    setShowAddMenu(false);
+  }, [quickConvertCount, nodes, setNodes]);
+
   // Duplicate a portfolio node with its holdings
   const handleDuplicatePortfolio = useCallback((sourceNodeId) => {
     const newPortfolioId = `portfolio-${portfolioCount + 1}`;
@@ -1262,6 +1368,22 @@ export default function Home() {
       [nodeId]: inputs,
     }));
   }, []);
+
+  const handleQuickConvertInputChange = useCallback((nodeId, inputs) => {
+    setQuickConvertInputs(prev => ({
+      ...prev,
+      [nodeId]: inputs,
+    }));
+  }, []);
+
+  const handleRemoveQuickConvert = useCallback((nodeId) => {
+    setNodes(prev => prev.filter(n => n.id !== nodeId));
+    setEdges(prev => prev.filter(e => e.source !== nodeId && e.target !== nodeId));
+    setQuickConvertInputs(prev => {
+      const { [nodeId]: _, ...rest } = prev;
+      return rest;
+    });
+  }, [setNodes, setEdges]);
 
   // Remove a buy node
   const handleRemoveBuy = useCallback((nodeId) => {
@@ -2076,6 +2198,17 @@ export default function Home() {
           },
         };
       }
+      if (node.type === 'quickConvert') {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            savedInputs: quickConvertInputs[node.id],
+            onInputChange: handleQuickConvertInputChange,
+            onRemove: handleRemoveQuickConvert,
+          },
+        };
+      }
       if (node.type === 'projected') {
         // Find which portfolio this projected node belongs to
         const sourcePortfolioId = Object.entries(projectedForPortfolio).find(
@@ -2094,7 +2227,7 @@ export default function Home() {
       }
       return node;
     });
-  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode]);
+  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert]);
 
   // Deduplicate edges to prevent React key warnings
   const uniqueEdges = useMemo(() => {
@@ -2139,6 +2272,8 @@ export default function Home() {
     setYields({});
     setYieldInputs({});
     setYieldCount(0);
+    setQuickConvertInputs({});
+    setQuickConvertCount(0);
     setProjectedForPortfolio({});
     setProjectedCount(0);
   }, [setNodes, setEdges]);
@@ -2221,6 +2356,13 @@ export default function Home() {
                   >
                     <span className="w-3 h-3 rounded bg-blue-500"></span>
                     New Portfolio
+                  </button>
+                  <button
+                    onClick={handleAddQuickConvert}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-2"
+                  >
+                    <span className="w-3 h-3 rounded bg-indigo-500"></span>
+                    Quick Convert
                   </button>
                 </div>
               </>
