@@ -15,9 +15,11 @@ function formatValue(value) {
   return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+const EMPTY_HOLDINGS = [];
+
 export default function PortfolioNode({ data, id }) {
   // Use holdings from parent (allows restoration from localStorage)
-  const holdings = data.holdings || [];
+  const holdings = data.holdings ?? EMPTY_HOLDINGS;
   const [newTicker, setNewTicker] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -50,6 +52,22 @@ export default function PortfolioNode({ data, id }) {
 
   const removeHolding = useCallback((index) => {
     const updated = holdings.filter((_, i) => i !== index);
+    data.onHoldingsChange?.(id, updated);
+  }, [holdings, data, id]);
+
+  const updateHoldingAmount = useCallback((index, rawAmount) => {
+    const amount = parseFloat(rawAmount);
+    if (!Number.isFinite(amount) || amount < 0) return;
+
+    const updated = holdings.map((holding, i) => {
+      if (i !== index) return holding;
+      return {
+        ...holding,
+        amount,
+        value: holding.price !== null ? holding.price * amount : null,
+      };
+    });
+
     data.onHoldingsChange?.(id, updated);
   }, [holdings, data, id]);
 
@@ -106,7 +124,19 @@ export default function PortfolioNode({ data, id }) {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <div className="text-zinc-600 dark:text-zinc-400">{holding.amount}</div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      defaultValue={holding.amount}
+                      onBlur={(e) => updateHoldingAmount(index, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      className="w-24 px-2 py-0.5 text-right text-zinc-600 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
                     {holding.price !== null ? (
                       <div className="text-xs text-zinc-500">
                         @ ${formatPrice(holding.price)}
