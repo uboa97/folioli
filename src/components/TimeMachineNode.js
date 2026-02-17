@@ -171,9 +171,15 @@ export default function TimeMachineNode({ data, id }) {
   ]);
 
   const parsedQty = quantity ? parseFloat(quantity) : 0;
-  const effectiveCurrentPrice = directPrice ? directPrice.price : currentPrice;
+  const refreshedCurrentPrice = (savedInputs?.asset === asset && savedInputs?.currentPrice !== undefined)
+    ? savedInputs.currentPrice
+    : currentPrice;
+  const refreshedCurrentType = (savedInputs?.asset === asset && savedInputs?.currentType !== undefined)
+    ? savedInputs.currentType
+    : currentType;
+  const effectiveCurrentPrice = directPrice ? directPrice.price : refreshedCurrentPrice;
   const effectivePastPrice = directPrice ? directPrice.price : pastPrice;
-  const effectiveCurrentType = directPrice ? directPrice.type : currentType;
+  const effectiveCurrentType = directPrice ? directPrice.type : refreshedCurrentType;
   const effectivePastType = directPrice ? directPrice.type : pastType;
   const hasPrices = effectiveCurrentPrice !== null && effectivePastPrice !== null;
   const priceDiff = hasPrices ? effectiveCurrentPrice - effectivePastPrice : 0;
