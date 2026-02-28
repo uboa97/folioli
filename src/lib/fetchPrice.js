@@ -7,7 +7,9 @@ export async function fetchPrice(symbol) {
   console.groupEnd();
 
   try {
-    const res = await fetch(`/api/price?symbol=${encodeURIComponent(symbol)}`);
+    const res = await fetch(`/api/price?symbol=${encodeURIComponent(symbol)}`, {
+      cache: 'no-store',
+    });
     const duration = (performance.now() - startTime).toFixed(0);
 
     if (!res.ok) {

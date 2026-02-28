@@ -112,7 +112,7 @@ async function fetchCryptoData(symbol) {
   try {
     const res = await fetch(
       `${COINGECKO_API}/simple/price?ids=${id}&vs_currencies=usd&include_market_cap=true`,
-      { next: { revalidate: 60 } }
+      { cache: 'no-store' }
     );
     if (!res.ok) return null;
     const data = await res.json();

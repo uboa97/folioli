@@ -21,6 +21,7 @@ import YieldNode from '@/components/YieldNode';
 import ProjectedPortfolioNode from '@/components/ProjectedPortfolioNode';
 import QuickConvertNode from '@/components/QuickConvertNode';
 import TimeMachineNode from '@/components/TimeMachineNode';
+import MarketCapSwapNode from '@/components/MarketCapSwapNode';
 import { fetchPrice } from '@/lib/fetchPrice';
 
 const nodeTypes = {
@@ -34,6 +35,7 @@ const nodeTypes = {
   projected: ProjectedPortfolioNode,
   quickConvert: QuickConvertNode,
   timeMachine: TimeMachineNode,
+  marketCapSwap: MarketCapSwapNode,
 };
 
 const INITIAL_PORTFOLIO_ID = 'portfolio-1';
@@ -98,6 +100,8 @@ export default function Home() {
   const [quickConvertCount, setQuickConvertCount] = useState(0);
   const [timeMachineInputs, setTimeMachineInputs] = useState({});
   const [timeMachineCount, setTimeMachineCount] = useState(0);
+  const [marketCapSwapInputs, setMarketCapSwapInputs] = useState({});
+  const [marketCapSwapCount, setMarketCapSwapCount] = useState(0);
   const [projectedForPortfolio, setProjectedForPortfolio] = useState({});
   const [projectedCount, setProjectedCount] = useState(0);
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
@@ -159,6 +163,16 @@ export default function Home() {
       for (const inputs of Object.values(timeMachineInputs)) {
         if (inputs.asset && inputs.asset !== 'USD' && inputs.asset !== 'CASH') {
           tickersToFetch.add(inputs.asset);
+        }
+      }
+
+      // From market cap swap inputs
+      for (const inputs of Object.values(marketCapSwapInputs)) {
+        if (inputs.fromAsset && inputs.fromAsset !== 'USD' && inputs.fromAsset !== 'CASH') {
+          tickersToFetch.add(inputs.fromAsset);
+        }
+        if (inputs.toAsset && inputs.toAsset !== 'USD' && inputs.toAsset !== 'CASH') {
+          tickersToFetch.add(inputs.toAsset);
         }
       }
 
@@ -288,10 +302,32 @@ export default function Home() {
         }
         setTimeMachineInputs(refreshedTimeMachineInputs);
       }
+
+      // Update market cap swap inputs with cached prices and market caps
+      if (Object.keys(marketCapSwapInputs).length > 0) {
+        const refreshedMarketCapSwapInputs = {};
+        for (const [nodeId, inputs] of Object.entries(marketCapSwapInputs)) {
+          const refreshed = { ...inputs };
+          if (inputs.fromAsset && priceMap[inputs.fromAsset]) {
+            const fromData = priceMap[inputs.fromAsset];
+            refreshed.fromPrice = fromData.price ?? inputs.fromPrice;
+            refreshed.fromMarketCap = fromData.marketCap ?? inputs.fromMarketCap;
+            refreshed.fromType = fromData.type !== 'unknown' ? fromData.type : inputs.fromType;
+          }
+          if (inputs.toAsset && priceMap[inputs.toAsset]) {
+            const toData = priceMap[inputs.toAsset];
+            refreshed.toPrice = toData.price ?? inputs.toPrice;
+            refreshed.toMarketCap = toData.marketCap ?? inputs.toMarketCap;
+            refreshed.toType = toData.type !== 'unknown' ? toData.type : inputs.toType;
+          }
+          refreshedMarketCapSwapInputs[nodeId] = refreshed;
+        }
+        setMarketCapSwapInputs(refreshedMarketCapSwapInputs);
+      }
     } finally {
       setIsRefreshingAll(false);
     }
-  }, [portfolioHoldings, rotationInputs, buyInputs, allInInputs, quickConvertInputs, timeMachineInputs]);
+  }, [portfolioHoldings, rotationInputs, buyInputs, allInInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs]);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -308,6 +344,7 @@ export default function Home() {
         if (saved.yieldCount !== undefined) setYieldCount(saved.yieldCount);
         if (saved.quickConvertCount !== undefined) setQuickConvertCount(saved.quickConvertCount);
         if (saved.timeMachineCount !== undefined) setTimeMachineCount(saved.timeMachineCount);
+        if (saved.marketCapSwapCount !== undefined) setMarketCapSwapCount(saved.marketCapSwapCount);
         if (saved.portfolioCount !== undefined) setPortfolioCount(saved.portfolioCount);
         if (saved.projectedForPortfolio) setProjectedForPortfolio(saved.projectedForPortfolio);
         if (saved.projectedCount !== undefined) setProjectedCount(saved.projectedCount);
@@ -334,6 +371,7 @@ export default function Home() {
         if (saved.yieldInputs) setYieldInputs(saved.yieldInputs);
         if (saved.quickConvertInputs) setQuickConvertInputs(saved.quickConvertInputs);
         if (saved.timeMachineInputs) setTimeMachineInputs(saved.timeMachineInputs);
+        if (saved.marketCapSwapInputs) setMarketCapSwapInputs(saved.marketCapSwapInputs);
 
         setIsHydrated(true);
 
@@ -394,6 +432,17 @@ export default function Home() {
           for (const inputs of Object.values(saved.timeMachineInputs)) {
             if (inputs.asset && inputs.asset !== 'USD' && inputs.asset !== 'CASH') {
               tickersToFetch.add(inputs.asset);
+            }
+          }
+        }
+
+        if (saved.marketCapSwapInputs) {
+          for (const inputs of Object.values(saved.marketCapSwapInputs)) {
+            if (inputs.fromAsset && inputs.fromAsset !== 'USD' && inputs.fromAsset !== 'CASH') {
+              tickersToFetch.add(inputs.fromAsset);
+            }
+            if (inputs.toAsset && inputs.toAsset !== 'USD' && inputs.toAsset !== 'CASH') {
+              tickersToFetch.add(inputs.toAsset);
             }
           }
         }
@@ -527,6 +576,28 @@ export default function Home() {
             }
             setTimeMachineInputs(refreshedTimeMachineInputs);
           }
+
+          // Update market cap swap inputs
+          if (saved.marketCapSwapInputs && Object.keys(saved.marketCapSwapInputs).length > 0) {
+            const refreshedMarketCapSwapInputs = {};
+            for (const [nodeId, inputs] of Object.entries(saved.marketCapSwapInputs)) {
+              const refreshed = { ...inputs };
+              if (inputs.fromAsset && priceMap[inputs.fromAsset]) {
+                const fromData = priceMap[inputs.fromAsset];
+                refreshed.fromPrice = fromData.price ?? inputs.fromPrice;
+                refreshed.fromMarketCap = fromData.marketCap ?? inputs.fromMarketCap;
+                refreshed.fromType = fromData.type !== 'unknown' ? fromData.type : inputs.fromType;
+              }
+              if (inputs.toAsset && priceMap[inputs.toAsset]) {
+                const toData = priceMap[inputs.toAsset];
+                refreshed.toPrice = toData.price ?? inputs.toPrice;
+                refreshed.toMarketCap = toData.marketCap ?? inputs.toMarketCap;
+                refreshed.toType = toData.type !== 'unknown' ? toData.type : inputs.toType;
+              }
+              refreshedMarketCapSwapInputs[nodeId] = refreshed;
+            }
+            setMarketCapSwapInputs(refreshedMarketCapSwapInputs);
+          }
         }
       } else {
         setIsHydrated(true);
@@ -580,10 +651,12 @@ export default function Home() {
       quickConvertCount,
       timeMachineInputs,
       timeMachineCount,
+      marketCapSwapInputs,
+      marketCapSwapCount,
       projectedForPortfolio,
       projectedCount,
     });
-  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, projectedForPortfolio, projectedCount]);
+  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, projectedForPortfolio, projectedCount]);
 
   // Check if a specific portfolio should have a projected node (has any action nodes connected)
   const getActionNodesForPortfolio = useCallback((portfolioId, edgesList) => {
@@ -647,6 +720,11 @@ export default function Home() {
     // Check for deleted time machine nodes
     const deletedTimeMachineIds = changes
       .filter(change => change.type === 'remove' && change.id.startsWith('timeMachine-'))
+      .map(change => change.id);
+
+    // Check for deleted market cap swap nodes
+    const deletedMarketCapSwapIds = changes
+      .filter(change => change.type === 'remove' && change.id.startsWith('marketCapSwap-'))
       .map(change => change.id);
 
     if (deletedPortfolioIds.length > 0) {
@@ -790,6 +868,17 @@ export default function Home() {
       });
       setEdges(prev => prev.filter(edge =>
         !deletedTimeMachineIds.includes(edge.source) && !deletedTimeMachineIds.includes(edge.target)
+      ));
+    }
+
+    if (deletedMarketCapSwapIds.length > 0) {
+      setMarketCapSwapInputs(prev => {
+        const updated = { ...prev };
+        deletedMarketCapSwapIds.forEach(id => delete updated[id]);
+        return updated;
+      });
+      setEdges(prev => prev.filter(edge =>
+        !deletedMarketCapSwapIds.includes(edge.source) && !deletedMarketCapSwapIds.includes(edge.target)
       ));
     }
 
@@ -1254,6 +1343,27 @@ export default function Home() {
     setShowAddMenu(false);
   }, [timeMachineCount, nodes, setNodes]);
 
+  const handleAddMarketCapSwap = useCallback(() => {
+    const newMarketCapSwapId = `marketCapSwap-${marketCapSwapCount + 1}`;
+    setMarketCapSwapCount(prev => prev + 1);
+
+    const existingMarketCapSwaps = nodes.filter(n => n.type === 'marketCapSwap');
+    const maxY = existingMarketCapSwaps.reduce((max, n) => Math.max(max, n.position.y), 0);
+    const baseY = existingMarketCapSwaps.length > 0 ? maxY + 260 : 150;
+
+    setNodes(prev => [
+      ...prev,
+      {
+        id: newMarketCapSwapId,
+        type: 'marketCapSwap',
+        position: { x: 1280, y: baseY },
+        data: {},
+      },
+    ]);
+
+    setShowAddMenu(false);
+  }, [marketCapSwapCount, nodes, setNodes]);
+
   // Duplicate a portfolio node with its holdings
   const handleDuplicatePortfolio = useCallback((sourceNodeId) => {
     const newPortfolioId = `portfolio-${portfolioCount + 1}`;
@@ -1486,6 +1596,22 @@ export default function Home() {
     setNodes(prev => prev.filter(n => n.id !== nodeId));
     setEdges(prev => prev.filter(e => e.source !== nodeId && e.target !== nodeId));
     setTimeMachineInputs(prev => {
+      const { [nodeId]: _, ...rest } = prev;
+      return rest;
+    });
+  }, [setNodes, setEdges]);
+
+  const handleMarketCapSwapInputChange = useCallback((nodeId, inputs) => {
+    setMarketCapSwapInputs(prev => ({
+      ...prev,
+      [nodeId]: inputs,
+    }));
+  }, []);
+
+  const handleRemoveMarketCapSwap = useCallback((nodeId) => {
+    setNodes(prev => prev.filter(n => n.id !== nodeId));
+    setEdges(prev => prev.filter(e => e.source !== nodeId && e.target !== nodeId));
+    setMarketCapSwapInputs(prev => {
       const { [nodeId]: _, ...rest } = prev;
       return rest;
     });
@@ -2326,6 +2452,17 @@ export default function Home() {
           },
         };
       }
+      if (node.type === 'marketCapSwap') {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            savedInputs: marketCapSwapInputs[node.id],
+            onInputChange: handleMarketCapSwapInputChange,
+            onRemove: handleRemoveMarketCapSwap,
+          },
+        };
+      }
       if (node.type === 'projected') {
         // Find which portfolio this projected node belongs to
         const sourcePortfolioId = Object.entries(projectedForPortfolio).find(
@@ -2344,7 +2481,7 @@ export default function Home() {
       }
       return node;
     });
-  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine]);
+  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap]);
 
   // Deduplicate edges to prevent React key warnings
   const uniqueEdges = useMemo(() => {
@@ -2393,6 +2530,8 @@ export default function Home() {
     setQuickConvertCount(0);
     setTimeMachineInputs({});
     setTimeMachineCount(0);
+    setMarketCapSwapInputs({});
+    setMarketCapSwapCount(0);
     setProjectedForPortfolio({});
     setProjectedCount(0);
   }, [setNodes, setEdges]);
@@ -2489,6 +2628,13 @@ export default function Home() {
                   >
                     <span className="w-3 h-3 rounded bg-emerald-600"></span>
                     Time Machine
+                  </button>
+                  <button
+                    onClick={handleAddMarketCapSwap}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-2"
+                  >
+                    <span className="w-3 h-3 rounded bg-rose-600"></span>
+                    Market Cap Swap
                   </button>
                 </div>
               </>
