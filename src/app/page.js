@@ -1757,283 +1757,135 @@ export default function Home() {
     return projectedId;
   }, [projectedCount, setNodes]);
 
-  const handleAddRotation = useCallback((sourcePortfolioId) => {
-    const newRotationId = `rotate-${rotationCount + 1}`;
-    setRotationCount(prev => prev + 1);
+  // Find the last action node in a portfolio's chain (the one connected to projected)
+  const getChainEndNode = useCallback((portfolioId) => {
+    const chains = getOrderedChainNodes(portfolioId);
+    if (chains.length === 0) return null;
+    // Take the first (and ideally only) chain, return its last node
+    const chain = chains[0];
+    return chain[chain.length - 1] || null;
+  }, [getOrderedChainNodes]);
 
+  // Common logic for adding an action node to a portfolio's chain
+  const addActionNodeToChain = useCallback((sourcePortfolioId, newNodeId, newNodeType, edgeColor) => {
     const sourceNode = nodes.find(n => n.id === sourcePortfolioId);
     const sourcePos = sourceNode?.position || { x: 100, y: 150 };
 
-    // Count existing action nodes for this portfolio to offset position
-    const portfolioActionNodes = edges
-      .filter(e => e.source === sourcePortfolioId)
-      .filter(e => e.target.startsWith('rotate-') || e.target.startsWith('sell-') || e.target.startsWith('buy-') || e.target.startsWith('priceTarget-') || e.target.startsWith('allIn-') || e.target.startsWith('yield-'));
-    const yOffset = portfolioActionNodes.length * 180;
-
-    setNodes(prev => {
-      let newNodes = [...prev];
-      newNodes.push({
-        id: newRotationId,
-        type: 'rotate',
-        position: { x: sourcePos.x + 400, y: sourcePos.y + yOffset },
-        data: { sourcePortfolioId },
-      });
-      return newNodes;
-    });
-
-    // Get or create projected node for this portfolio
     const projectedId = projectedForPortfolio[sourcePortfolioId] || `projected-${projectedCount + 1}`;
     ensureProjectedNodeForPortfolio(sourcePortfolioId, sourcePos);
 
-    setEdges(prev => {
-      const newEdges = [...prev];
-      newEdges.push({
-        id: `edge-${sourcePortfolioId}-${newRotationId}`,
-        source: sourcePortfolioId,
-        target: newRotationId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#3b82f6' },
+    // Find the first action node in the existing chain (directly after portfolio)
+    const firstActionEdge = edges.find(e =>
+      e.source === sourcePortfolioId && isActionNode(e.target)
+    );
+
+    if (firstActionEdge) {
+      // Insert between portfolio and first action node
+      const firstActionId = firstActionEdge.target;
+
+      setNodes(prev => [
+        ...prev,
+        {
+          id: newNodeId,
+          type: newNodeType,
+          position: { x: sourcePos.x + 400, y: sourcePos.y },
+          data: { sourcePortfolioId },
+        },
+      ]);
+
+      setEdges(prev => {
+        // Remove portfolio -> firstAction edge
+        const filtered = prev.filter(e =>
+          !(e.source === sourcePortfolioId && e.target === firstActionId)
+        );
+
+        // Add portfolio -> newNode
+        filtered.push({
+          id: `edge-${sourcePortfolioId}-${newNodeId}`,
+          source: sourcePortfolioId,
+          target: newNodeId,
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: { stroke: '#3b82f6' },
+        });
+
+        // Add newNode -> firstAction
+        filtered.push({
+          id: `edge-${newNodeId}-${firstActionId}`,
+          source: newNodeId,
+          target: firstActionId,
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: { stroke: edgeColor },
+        });
+
+        return filtered;
       });
-      newEdges.push({
-        id: `edge-${newRotationId}-${projectedId}`,
-        source: newRotationId,
-        target: projectedId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#f97316' },
-      });
-      return newEdges;
-    });
-  }, [nodes, edges, rotationCount, projectedCount, projectedForPortfolio, setNodes, setEdges, ensureProjectedNodeForPortfolio]);
+    } else {
+      // No existing chain: portfolio -> newNode -> projected
+      setNodes(prev => [
+        ...prev,
+        {
+          id: newNodeId,
+          type: newNodeType,
+          position: { x: sourcePos.x + 400, y: sourcePos.y },
+          data: { sourcePortfolioId },
+        },
+      ]);
+
+      setEdges(prev => [
+        ...prev,
+        {
+          id: `edge-${sourcePortfolioId}-${newNodeId}`,
+          source: sourcePortfolioId,
+          target: newNodeId,
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: { stroke: '#3b82f6' },
+        },
+        {
+          id: `edge-${newNodeId}-${projectedId}`,
+          source: newNodeId,
+          target: projectedId,
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: { stroke: edgeColor },
+        },
+      ]);
+    }
+  }, [nodes, edges, projectedForPortfolio, projectedCount, ensureProjectedNodeForPortfolio, isActionNode, setNodes, setEdges]);
+
+  const handleAddRotation = useCallback((sourcePortfolioId) => {
+    const newRotationId = `rotate-${rotationCount + 1}`;
+    setRotationCount(prev => prev + 1);
+    addActionNodeToChain(sourcePortfolioId, newRotationId, 'rotate', '#f97316');
+  }, [rotationCount, addActionNodeToChain]);
 
   const handleAddSell = useCallback((sourcePortfolioId) => {
     const newSellId = `sell-${sellCount + 1}`;
     setSellCount(prev => prev + 1);
-
-    const sourceNode = nodes.find(n => n.id === sourcePortfolioId);
-    const sourcePos = sourceNode?.position || { x: 100, y: 150 };
-
-    const portfolioActionNodes = edges
-      .filter(e => e.source === sourcePortfolioId)
-      .filter(e => e.target.startsWith('rotate-') || e.target.startsWith('sell-') || e.target.startsWith('buy-') || e.target.startsWith('priceTarget-') || e.target.startsWith('allIn-') || e.target.startsWith('yield-'));
-    const yOffset = portfolioActionNodes.length * 180;
-
-    setNodes(prev => {
-      let newNodes = [...prev];
-      newNodes.push({
-        id: newSellId,
-        type: 'sell',
-        position: { x: sourcePos.x + 400, y: sourcePos.y + yOffset },
-        data: { sourcePortfolioId },
-      });
-      return newNodes;
-    });
-
-    const projectedId = projectedForPortfolio[sourcePortfolioId] || `projected-${projectedCount + 1}`;
-    ensureProjectedNodeForPortfolio(sourcePortfolioId, sourcePos);
-
-    setEdges(prev => {
-      const newEdges = [...prev];
-      newEdges.push({
-        id: `edge-${sourcePortfolioId}-${newSellId}`,
-        source: sourcePortfolioId,
-        target: newSellId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#3b82f6' },
-      });
-      newEdges.push({
-        id: `edge-${newSellId}-${projectedId}`,
-        source: newSellId,
-        target: projectedId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#ef4444' },
-      });
-      return newEdges;
-    });
-  }, [nodes, edges, sellCount, projectedCount, projectedForPortfolio, setNodes, setEdges, ensureProjectedNodeForPortfolio]);
+    addActionNodeToChain(sourcePortfolioId, newSellId, 'sell', '#ef4444');
+  }, [sellCount, addActionNodeToChain]);
 
   const handleAddBuy = useCallback((sourcePortfolioId) => {
     const newBuyId = `buy-${buyCount + 1}`;
     setBuyCount(prev => prev + 1);
-
-    const sourceNode = nodes.find(n => n.id === sourcePortfolioId);
-    const sourcePos = sourceNode?.position || { x: 100, y: 150 };
-
-    const portfolioActionNodes = edges
-      .filter(e => e.source === sourcePortfolioId)
-      .filter(e => e.target.startsWith('rotate-') || e.target.startsWith('sell-') || e.target.startsWith('buy-') || e.target.startsWith('priceTarget-') || e.target.startsWith('allIn-') || e.target.startsWith('yield-'));
-    const yOffset = portfolioActionNodes.length * 180;
-
-    setNodes(prev => {
-      let newNodes = [...prev];
-      newNodes.push({
-        id: newBuyId,
-        type: 'buy',
-        position: { x: sourcePos.x + 400, y: sourcePos.y + yOffset },
-        data: { sourcePortfolioId },
-      });
-      return newNodes;
-    });
-
-    const projectedId = projectedForPortfolio[sourcePortfolioId] || `projected-${projectedCount + 1}`;
-    ensureProjectedNodeForPortfolio(sourcePortfolioId, sourcePos);
-
-    setEdges(prev => {
-      const newEdges = [...prev];
-      newEdges.push({
-        id: `edge-${sourcePortfolioId}-${newBuyId}`,
-        source: sourcePortfolioId,
-        target: newBuyId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#3b82f6' },
-      });
-      newEdges.push({
-        id: `edge-${newBuyId}-${projectedId}`,
-        source: newBuyId,
-        target: projectedId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#22c55e' },
-      });
-      return newEdges;
-    });
-  }, [nodes, edges, buyCount, projectedCount, projectedForPortfolio, setNodes, setEdges, ensureProjectedNodeForPortfolio]);
+    addActionNodeToChain(sourcePortfolioId, newBuyId, 'buy', '#22c55e');
+  }, [buyCount, addActionNodeToChain]);
 
   const handleAddPriceTarget = useCallback((sourcePortfolioId) => {
     const newPriceTargetId = `priceTarget-${priceTargetCount + 1}`;
     setPriceTargetCount(prev => prev + 1);
-
-    const sourceNode = nodes.find(n => n.id === sourcePortfolioId);
-    const sourcePos = sourceNode?.position || { x: 100, y: 150 };
-
-    const portfolioActionNodes = edges
-      .filter(e => e.source === sourcePortfolioId)
-      .filter(e => e.target.startsWith('rotate-') || e.target.startsWith('sell-') || e.target.startsWith('buy-') || e.target.startsWith('priceTarget-') || e.target.startsWith('allIn-') || e.target.startsWith('yield-'));
-    const yOffset = portfolioActionNodes.length * 180;
-
-    setNodes(prev => {
-      let newNodes = [...prev];
-      newNodes.push({
-        id: newPriceTargetId,
-        type: 'priceTarget',
-        position: { x: sourcePos.x + 400, y: sourcePos.y + yOffset },
-        data: { sourcePortfolioId },
-      });
-      return newNodes;
-    });
-
-    const projectedId = projectedForPortfolio[sourcePortfolioId] || `projected-${projectedCount + 1}`;
-    ensureProjectedNodeForPortfolio(sourcePortfolioId, sourcePos);
-
-    setEdges(prev => {
-      const newEdges = [...prev];
-      newEdges.push({
-        id: `edge-${sourcePortfolioId}-${newPriceTargetId}`,
-        source: sourcePortfolioId,
-        target: newPriceTargetId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#3b82f6' },
-      });
-      newEdges.push({
-        id: `edge-${newPriceTargetId}-${projectedId}`,
-        source: newPriceTargetId,
-        target: projectedId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#06b6d4' },
-      });
-      return newEdges;
-    });
-  }, [nodes, edges, priceTargetCount, projectedCount, projectedForPortfolio, setNodes, setEdges, ensureProjectedNodeForPortfolio]);
+    addActionNodeToChain(sourcePortfolioId, newPriceTargetId, 'priceTarget', '#06b6d4');
+  }, [priceTargetCount, addActionNodeToChain]);
 
   const handleAddAllIn = useCallback((sourcePortfolioId) => {
     const newAllInId = `allIn-${allInCount + 1}`;
     setAllInCount(prev => prev + 1);
-
-    const sourceNode = nodes.find(n => n.id === sourcePortfolioId);
-    const sourcePos = sourceNode?.position || { x: 100, y: 150 };
-
-    const portfolioActionNodes = edges
-      .filter(e => e.source === sourcePortfolioId)
-      .filter(e => e.target.startsWith('rotate-') || e.target.startsWith('sell-') || e.target.startsWith('buy-') || e.target.startsWith('priceTarget-') || e.target.startsWith('allIn-') || e.target.startsWith('yield-'));
-    const yOffset = portfolioActionNodes.length * 180;
-
-    setNodes(prev => {
-      let newNodes = [...prev];
-      newNodes.push({
-        id: newAllInId,
-        type: 'allIn',
-        position: { x: sourcePos.x + 400, y: sourcePos.y + yOffset },
-        data: { sourcePortfolioId },
-      });
-      return newNodes;
-    });
-
-    const projectedId = projectedForPortfolio[sourcePortfolioId] || `projected-${projectedCount + 1}`;
-    ensureProjectedNodeForPortfolio(sourcePortfolioId, sourcePos);
-
-    setEdges(prev => {
-      const newEdges = [...prev];
-      newEdges.push({
-        id: `edge-${sourcePortfolioId}-${newAllInId}`,
-        source: sourcePortfolioId,
-        target: newAllInId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#3b82f6' },
-      });
-      newEdges.push({
-        id: `edge-${newAllInId}-${projectedId}`,
-        source: newAllInId,
-        target: projectedId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#eab308' },
-      });
-      return newEdges;
-    });
-  }, [nodes, edges, allInCount, projectedCount, projectedForPortfolio, setNodes, setEdges, ensureProjectedNodeForPortfolio]);
+    addActionNodeToChain(sourcePortfolioId, newAllInId, 'allIn', '#eab308');
+  }, [allInCount, addActionNodeToChain]);
 
   const handleAddYield = useCallback((sourcePortfolioId) => {
     const newYieldId = `yield-${yieldCount + 1}`;
     setYieldCount(prev => prev + 1);
-
-    const sourceNode = nodes.find(n => n.id === sourcePortfolioId);
-    const sourcePos = sourceNode?.position || { x: 100, y: 150 };
-
-    const portfolioActionNodes = edges
-      .filter(e => e.source === sourcePortfolioId)
-      .filter(e => e.target.startsWith('rotate-') || e.target.startsWith('sell-') || e.target.startsWith('buy-') || e.target.startsWith('priceTarget-') || e.target.startsWith('allIn-') || e.target.startsWith('yield-'));
-    const yOffset = portfolioActionNodes.length * 180;
-
-    setNodes(prev => {
-      let newNodes = [...prev];
-      newNodes.push({
-        id: newYieldId,
-        type: 'yield',
-        position: { x: sourcePos.x + 400, y: sourcePos.y + yOffset },
-        data: { sourcePortfolioId },
-      });
-      return newNodes;
-    });
-
-    const projectedId = projectedForPortfolio[sourcePortfolioId] || `projected-${projectedCount + 1}`;
-    ensureProjectedNodeForPortfolio(sourcePortfolioId, sourcePos);
-
-    setEdges(prev => {
-      const newEdges = [...prev];
-      newEdges.push({
-        id: `edge-${sourcePortfolioId}-${newYieldId}`,
-        source: sourcePortfolioId,
-        target: newYieldId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#3b82f6' },
-      });
-      newEdges.push({
-        id: `edge-${newYieldId}-${projectedId}`,
-        source: newYieldId,
-        target: projectedId,
-        markerEnd: { type: MarkerType.ArrowClosed },
-        style: { stroke: '#a855f7' },
-      });
-      return newEdges;
-    });
-  }, [nodes, edges, yieldCount, projectedCount, projectedForPortfolio, setNodes, setEdges, ensureProjectedNodeForPortfolio]);
+    addActionNodeToChain(sourcePortfolioId, newYieldId, 'yield', '#a855f7');
+  }, [yieldCount, addActionNodeToChain]);
 
   // Add a chained node after an existing action node
   const handleAddChainedNode = useCallback((sourceNodeId, nodeType) => {
@@ -2097,12 +1949,20 @@ export default function Home() {
       },
     ]);
 
-    // Update edges: remove source->projected, add source->new, add new->projected
+    // Update edges: insert new node between source and its current next target
     setEdges(prev => {
-      // Remove the edge from source to projected
-      const filtered = prev.filter(e =>
-        !(e.source === sourceNodeId && e.target === projectedId)
+      // Find the outgoing edge from source (could go to projected or another action node)
+      const outgoingEdge = prev.find(e =>
+        e.source === sourceNodeId && (e.target === projectedId || isActionNode(e.target))
       );
+
+      // Determine the next target (what the source currently connects to)
+      const nextTarget = outgoingEdge ? outgoingEdge.target : projectedId;
+
+      // Remove the outgoing edge from source
+      const filtered = outgoingEdge
+        ? prev.filter(e => e !== outgoingEdge)
+        : [...prev];
 
       // Add edge from source to new node
       filtered.push({
@@ -2113,18 +1973,18 @@ export default function Home() {
         style: { stroke: edgeColor },
       });
 
-      // Add edge from new node to projected
+      // Add edge from new node to the original next target
       filtered.push({
-        id: `edge-${newNodeId}-${projectedId}`,
+        id: `edge-${newNodeId}-${nextTarget}`,
         source: newNodeId,
-        target: projectedId,
+        target: nextTarget,
         markerEnd: { type: MarkerType.ArrowClosed },
         style: { stroke: edgeColor },
       });
 
       return filtered;
     });
-  }, [nodes, projectedForPortfolio, getSourcePortfolioForAction, rotationCount, sellCount, buyCount, priceTargetCount, allInCount, yieldCount, setNodes, setEdges]);
+  }, [nodes, projectedForPortfolio, getSourcePortfolioForAction, isActionNode, rotationCount, sellCount, buyCount, priceTargetCount, allInCount, yieldCount, setNodes, setEdges]);
 
   // Calculate projected holdings for a specific portfolio
   const calculateProjectedHoldings = useCallback((portfolioId) => {
@@ -2555,8 +2415,27 @@ export default function Home() {
       // Don't add if edge already exists
       if (prev.some(e => e.id === newEdgeId)) return prev;
 
+      let filtered = prev;
+
+      // When connecting action/portfolio -> action node, clean up conflicting edges
+      if (isActionNode(target)) {
+        // Remove the target's existing incoming edge from a portfolio or action node
+        // (an action node should only have one incoming chain edge)
+        filtered = filtered.filter(e =>
+          !(e.target === target && (e.source.startsWith('portfolio-') || isActionNode(e.source)))
+        );
+      }
+
+      // When connecting from an action node, remove its existing outgoing edge
+      // to projected or another action node (an action node should have one outgoing chain edge)
+      if (isActionNode(source)) {
+        filtered = filtered.filter(e =>
+          !(e.source === source && (e.target.startsWith('projected-') || isActionNode(e.target)))
+        );
+      }
+
       return [
-        ...prev,
+        ...filtered,
         {
           id: newEdgeId,
           source,
@@ -2566,7 +2445,7 @@ export default function Home() {
         },
       ];
     });
-  }, [setEdges]);
+  }, [setEdges, isActionNode]);
 
   if (!isHydrated) {
     return (

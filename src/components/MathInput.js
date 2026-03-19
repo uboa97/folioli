@@ -66,7 +66,7 @@ export default function MathInput({ value, onChange, className = '', ...props })
   const { onKeyDown: _, ...restProps } = props;
 
   return (
-    <div className="relative flex">
+    <div className={`flex ${showEquals ? 'relative' : ''}`}>
       <input
         ref={inputRef}
         type="text"
