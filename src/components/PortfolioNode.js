@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import MathInput from './MathInput';
 import { Handle, Position } from '@xyflow/react';
 import { fetchPrice } from '@/lib/fetchPrice';
 
@@ -124,17 +125,11 @@ export default function PortfolioNode({ data, id }) {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <input
-                      type="number"
+                    <MathInput
                       min="0"
                       step="any"
-                      defaultValue={holding.amount}
-                      onBlur={(e) => updateHoldingAmount(index, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.currentTarget.blur();
-                        }
-                      }}
+                      value={String(holding.amount)}
+                      onChange={(val) => updateHoldingAmount(index, val)}
                       className="w-24 px-2 py-0.5 text-right text-zinc-600 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     {holding.price !== null ? (
@@ -204,11 +199,10 @@ export default function PortfolioNode({ data, id }) {
             disabled={isLoading}
             className="flex-1 px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           />
-          <input
-            type="number"
+          <MathInput
             placeholder="Amount"
             value={newAmount}
-            onChange={(e) => setNewAmount(e.target.value)}
+            onChange={(val) => setNewAmount(val)}
             onKeyDown={handleKeyDown}
             disabled={isLoading}
             className="w-24 px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"

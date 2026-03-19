@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import MathInput from './MathInput';
 import { Handle, Position } from '@xyflow/react';
 
 function formatPrice(price) {
@@ -192,10 +193,9 @@ export default function PriceTargetNode({ data, id }) {
               {targetMode === 'price' ? (
                 <div className="relative">
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
-                  <input
-                    type="number"
+                  <MathInput
                     value={targetValue}
-                    onChange={(e) => setTargetValue(e.target.value)}
+                    onChange={(val) => setTargetValue(val)}
                     step="any"
                     className="w-full pl-6 pr-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                     placeholder={currentPrice ? formatPrice(currentPrice) : '0.00'}

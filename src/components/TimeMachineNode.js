@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import MathInput from './MathInput';
 import { fetchPrice } from '@/lib/fetchPrice';
 import { fetchHistoricalPrice } from '@/lib/fetchHistoricalPrice';
 
@@ -281,10 +282,9 @@ export default function TimeMachineNode({ data, id }) {
 
         <div>
           <label className="block text-xs text-zinc-500 mb-1">Shares / Tokens (optional)</label>
-          <input
-            type="number"
+          <MathInput
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
+            onChange={(val) => setQuantity(val)}
             step="any"
             className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             placeholder="Leave blank to compare price only"

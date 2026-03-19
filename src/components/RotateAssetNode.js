@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { fetchPrice } from '@/lib/fetchPrice';
+import MathInput from './MathInput';
 
 function formatPrice(price) {
   if (price >= 1) {
@@ -189,10 +190,9 @@ export default function RotateAssetNode({ data, id }) {
                 Max
               </button>
             </div>
-            <input
-              type="number"
+            <MathInput
               value={sellAmount}
-              onChange={(e) => setSellAmount(e.target.value)}
+              onChange={(val) => setSellAmount(val)}
               max={selectedHolding.amount}
               step="any"
               className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-orange-500"

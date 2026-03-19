@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import MathInput from './MathInput';
 import { Handle, Position } from '@xyflow/react';
 
 function formatPrice(price) {
@@ -158,10 +159,9 @@ export default function YieldNode({ data, id }) {
             <div>
               <label className="block text-xs text-zinc-500 mb-1">Annual Yield %</label>
               <div className="relative">
-                <input
-                  type="number"
+                <MathInput
                   value={yieldPercent}
-                  onChange={(e) => setYieldPercent(e.target.value)}
+                  onChange={(val) => setYieldPercent(val)}
                   step="any"
                   className="w-full px-2 pr-8 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="e.g. 5"
@@ -173,10 +173,9 @@ export default function YieldNode({ data, id }) {
             <div>
               <label className="block text-xs text-zinc-500 mb-1">Time Period</label>
               <div className="flex gap-2">
-                <input
-                  type="number"
+                <MathInput
                   value={timeAmount}
-                  onChange={(e) => setTimeAmount(e.target.value)}
+                  onChange={(val) => setTimeAmount(val)}
                   step="any"
                   className="flex-1 px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   placeholder="e.g. 1"

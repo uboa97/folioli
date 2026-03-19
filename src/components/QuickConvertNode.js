@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { fetchPrice } from '@/lib/fetchPrice';
+import MathInput from './MathInput';
 
 function formatPrice(price) {
   if (price >= 1) {
@@ -176,10 +177,9 @@ export default function QuickConvertNode({ data, id }) {
 
         <div>
           <label className="block text-xs text-zinc-500 mb-1">Amount ({fromAsset || 'From Asset'})</label>
-          <input
-            type="number"
+          <MathInput
             value={fromAmount}
-            onChange={(e) => setFromAmount(e.target.value)}
+            onChange={(val) => setFromAmount(val)}
             step="any"
             className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             placeholder="0"

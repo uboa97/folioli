@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import MathInput from './MathInput';
 import { Handle, Position } from '@xyflow/react';
 
 function formatPrice(price) {
@@ -175,10 +176,9 @@ export default function SellAssetNode({ data, id }) {
                 {inputMode === 'usd' && (
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
                 )}
-                <input
-                  type="number"
+                <MathInput
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
+                  onChange={(val) => setInputValue(val)}
                   max={inputMode === 'units' ? selectedHolding.amount : selectedHolding.amount * assetPrice}
                   step="any"
                   className={`w-full ${inputMode === 'usd' ? 'pl-6' : 'pl-2'} pr-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-red-500`}
