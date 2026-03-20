@@ -28,6 +28,7 @@ export default function BuyAssetNode({ data, id }) {
   const [toAsset, setToAsset] = useState(savedInputs?.toAsset || '');
   const [toPrice, setToPrice] = useState(savedInputs?.toPrice ?? null);
   const [toType, setToType] = useState(savedInputs?.toType ?? null);
+  const [deductCash, setDeductCash] = useState(savedInputs?.deductCash ?? true);
   const [isFetchingPrice, setIsFetchingPrice] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const lastSavedPriceRef = useRef(savedInputs?.toPrice);
@@ -115,9 +116,10 @@ export default function BuyAssetNode({ data, id }) {
         toAsset,
         toPrice,
         toType,
+        deductCash,
       });
     }
-  }, [isInitialized, id, inputMode, inputValue, toAsset, toPrice, toType]);
+  }, [isInitialized, id, inputMode, inputValue, toAsset, toPrice, toType, deductCash]);
 
   // Notify parent of buy changes
   useEffect(() => {
@@ -131,11 +133,12 @@ export default function BuyAssetNode({ data, id }) {
         toPrice,
         toType,
         buyAmount,
+        deductCash,
       });
     } else {
       callback(id, null);
     }
-  }, [inputValue, toAsset, toPrice, toType, cashAmount, buyAmount, id]);
+  }, [inputValue, toAsset, toPrice, toType, cashAmount, buyAmount, deductCash, id]);
 
   return (
     <div className={`bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[280px] ${isDisabled ? 'opacity-40' : ''}`}>
@@ -146,7 +149,7 @@ export default function BuyAssetNode({ data, id }) {
       />
 
       <div className="bg-green-500 text-white px-4 py-2 rounded-t-lg font-semibold flex justify-between items-center">
-        <span>Buy with Cash</span>
+        <span>Buy</span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => onToggleDisabled?.(id)}
@@ -257,6 +260,16 @@ export default function BuyAssetNode({ data, id }) {
                 </div>
               </div>
             )}
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={deductCash}
+                onChange={(e) => setDeductCash(e.target.checked)}
+                className="accent-green-500"
+              />
+              <span className="text-xs text-zinc-500">Deduct from cash balance</span>
+            </label>
           </>
         )}
 

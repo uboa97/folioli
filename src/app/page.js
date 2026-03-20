@@ -1113,7 +1113,7 @@ export default function Home() {
       if (nodeId.startsWith('sell-')) {
         const sell = sells[nodeId];
         if (sell) {
-          const { fromAsset, sellAmount, sellValue } = sell;
+          const { fromAsset, sellAmount, sellValue, addCash: shouldAddCash = true } = sell;
 
           const fromIndex = projected.findIndex(h => h.ticker === fromAsset);
           if (fromIndex !== -1) {
@@ -1124,16 +1124,20 @@ export default function Home() {
             }
           }
 
-          totalCash += sellValue;
+          if (shouldAddCash) {
+            totalCash += sellValue;
+          }
         }
       }
 
       if (nodeId.startsWith('buy-')) {
         const buy = buys[nodeId];
         if (buy) {
-          const { cashAmount, toAsset, toPrice, toType, buyAmount } = buy;
+          const { cashAmount, toAsset, toPrice, toType, buyAmount, deductCash: shouldDeduct = true } = buy;
 
-          totalCash -= cashAmount;
+          if (shouldDeduct) {
+            totalCash -= cashAmount;
+          }
 
           const toIndex = projected.findIndex(h => h.ticker === toAsset);
           if (toIndex !== -1) {
@@ -1167,6 +1171,25 @@ export default function Home() {
           }
         }
       }
+
+      if (nodeId.startsWith('allIn-')) {
+        const allIn = allIns[nodeId];
+        if (allIn) {
+          const { toAsset, toPrice, toType } = allIn;
+          const currentTotalValue = projected.reduce((sum, h) => sum + (h.value || 0), 0) + totalCash;
+          projected.length = 0;
+          totalCash = 0;
+          if (currentTotalValue > 0 && toPrice) {
+            projected.push({
+              ticker: toAsset,
+              amount: currentTotalValue / toPrice,
+              price: toPrice,
+              type: toType,
+              value: currentTotalValue,
+            });
+          }
+        }
+      }
     }
 
     // Add/update cash position if any
@@ -1190,7 +1213,7 @@ export default function Home() {
     }
 
     return projected;
-  }, [portfolioHoldings, getOrderedChainNodes, priceTargets, rotations, sells, buys, yields, disabledNodes]);
+  }, [portfolioHoldings, getOrderedChainNodes, priceTargets, rotations, sells, buys, yields, allIns, disabledNodes]);
 
   // Helper to remove an action node and clean up its portfolio's projected node if needed
   const removeActionNode = useCallback((nodeId, cleanupState) => {
@@ -2077,7 +2100,7 @@ export default function Home() {
           const sell = sells[actionId];
           if (!sell) continue;
 
-          const { fromAsset, sellAmount, sellValue } = sell;
+          const { fromAsset, sellAmount, sellValue, addCash: shouldAddCash = true } = sell;
 
           const fromIndex = projected.findIndex(h => h.ticker === fromAsset);
           if (fromIndex !== -1) {
@@ -2088,16 +2111,20 @@ export default function Home() {
             }
           }
 
-          totalCash += sellValue;
+          if (shouldAddCash) {
+            totalCash += sellValue;
+          }
         }
 
         if (actionId.startsWith('buy-')) {
           const buy = buys[actionId];
           if (!buy) continue;
 
-          const { cashAmount, toAsset, toPrice, toType, buyAmount } = buy;
+          const { cashAmount, toAsset, toPrice, toType, buyAmount, deductCash: shouldDeduct = true } = buy;
 
-          totalCash -= cashAmount;
+          if (shouldDeduct) {
+            totalCash -= cashAmount;
+          }
 
           const toIndex = projected.findIndex(h => h.ticker === toAsset);
           if (toIndex !== -1) {

@@ -25,6 +25,7 @@ export default function SellAssetNode({ data, id }) {
   const [fromAsset, setFromAsset] = useState(savedInputs?.fromAsset || '');
   const [inputMode, setInputMode] = useState(savedInputs?.inputMode || 'units'); // 'units' or 'usd'
   const [inputValue, setInputValue] = useState(savedInputs?.inputValue || '');
+  const [addCash, setAddCash] = useState(savedInputs?.addCash ?? true);
   const [isInitialized, setIsInitialized] = useState(false);
 
   const selectedHolding = holdings.find(h => h.ticker === fromAsset);
@@ -53,9 +54,10 @@ export default function SellAssetNode({ data, id }) {
         fromAsset,
         inputMode,
         inputValue,
+        addCash,
       });
     }
-  }, [isInitialized, id, fromAsset, inputMode, inputValue]);
+  }, [isInitialized, id, fromAsset, inputMode, inputValue, addCash]);
 
   // Notify parent of sell changes
   useEffect(() => {
@@ -67,11 +69,12 @@ export default function SellAssetNode({ data, id }) {
         fromAsset,
         sellAmount,
         sellValue,
+        addCash,
       });
     } else {
       callback(id, null);
     }
-  }, [fromAsset, inputValue, sellAmount, sellValue, selectedHolding?.price, id]);
+  }, [fromAsset, inputValue, sellAmount, sellValue, selectedHolding?.price, addCash, id]);
 
   return (
     <div className={`bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[280px] ${isDisabled ? 'opacity-40' : ''}`}>
@@ -82,7 +85,7 @@ export default function SellAssetNode({ data, id }) {
       />
 
       <div className="bg-red-500 text-white px-4 py-2 rounded-t-lg font-semibold flex justify-between items-center">
-        <span>Sell for Cash</span>
+        <span>Sell</span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => onToggleDisabled?.(id)}
@@ -207,6 +210,16 @@ export default function SellAssetNode({ data, id }) {
                 </div>
               </div>
             )}
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={addCash}
+                onChange={(e) => setAddCash(e.target.checked)}
+                className="accent-red-500"
+              />
+              <span className="text-xs text-zinc-500">Add to cash balance</span>
+            </label>
           </>
         )}
 
