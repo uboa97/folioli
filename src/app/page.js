@@ -104,6 +104,7 @@ export default function Home() {
   const [marketCapSwapCount, setMarketCapSwapCount] = useState(0);
   const [projectedForPortfolio, setProjectedForPortfolio] = useState({});
   const [projectedCount, setProjectedCount] = useState(0);
+  const [disabledNodes, setDisabledNodes] = useState({});
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
 
@@ -372,6 +373,7 @@ export default function Home() {
         if (saved.quickConvertInputs) setQuickConvertInputs(saved.quickConvertInputs);
         if (saved.timeMachineInputs) setTimeMachineInputs(saved.timeMachineInputs);
         if (saved.marketCapSwapInputs) setMarketCapSwapInputs(saved.marketCapSwapInputs);
+        if (saved.disabledNodes) setDisabledNodes(saved.disabledNodes);
 
         setIsHydrated(true);
 
@@ -655,8 +657,9 @@ export default function Home() {
       marketCapSwapCount,
       projectedForPortfolio,
       projectedCount,
+      disabledNodes,
     });
-  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, projectedForPortfolio, projectedCount]);
+  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, projectedForPortfolio, projectedCount, disabledNodes]);
 
   // Check if a specific portfolio should have a projected node (has any action nodes connected)
   const getActionNodesForPortfolio = useCallback((portfolioId, edgesList) => {
@@ -921,6 +924,19 @@ export default function Home() {
     }
   }, [onNodesChange, setEdges, setNodes, getActionNodesForPortfolio]);
 
+  // Toggle a node's disabled state
+  const handleToggleNodeDisabled = useCallback((nodeId) => {
+    setDisabledNodes(prev => {
+      const next = { ...prev };
+      if (next[nodeId]) {
+        delete next[nodeId];
+      } else {
+        next[nodeId] = true;
+      }
+      return next;
+    });
+  }, []);
+
   // Helper to check if a node is an action node
   const isActionNode = useCallback((nodeId) => {
     return nodeId.startsWith('rotate-') ||
@@ -1005,6 +1021,7 @@ export default function Home() {
     // Collect price overrides from nodes before stopIndex
     for (let i = 0; i < stopIndex; i++) {
       const nodeId = targetChain[i];
+      if (disabledNodes[nodeId]) continue;
       if (nodeId.startsWith('priceTarget-')) {
         const pt = priceTargets[nodeId];
         if (pt && pt.asset && pt.targetPrice) {
@@ -1014,7 +1031,7 @@ export default function Home() {
     }
 
     return priceOverrides;
-  }, [getOrderedChainNodes, priceTargets]);
+  }, [getOrderedChainNodes, priceTargets, disabledNodes]);
 
   // Compute holdings after applying transformations up to (but not including) a specific node
   const computeHoldingsUpTo = useCallback((portfolioId, stopBeforeNodeId) => {
@@ -1045,6 +1062,7 @@ export default function Home() {
     // First pass: apply price targets
     for (let i = 0; i < stopIndex; i++) {
       const nodeId = targetChain[i];
+      if (disabledNodes[nodeId]) continue;
       if (nodeId.startsWith('priceTarget-')) {
         const pt = priceTargets[nodeId];
         if (pt && pt.asset && pt.targetPrice) {
@@ -1060,6 +1078,7 @@ export default function Home() {
     // Second pass: apply rotations, sells, buys
     for (let i = 0; i < stopIndex; i++) {
       const nodeId = targetChain[i];
+      if (disabledNodes[nodeId]) continue;
 
       if (nodeId.startsWith('rotate-')) {
         const rotation = rotations[nodeId];
@@ -1171,7 +1190,7 @@ export default function Home() {
     }
 
     return projected;
-  }, [portfolioHoldings, getOrderedChainNodes, priceTargets, rotations, sells, buys, yields]);
+  }, [portfolioHoldings, getOrderedChainNodes, priceTargets, rotations, sells, buys, yields, disabledNodes]);
 
   // Helper to remove an action node and clean up its portfolio's projected node if needed
   const removeActionNode = useCallback((nodeId, cleanupState) => {
@@ -1991,8 +2010,8 @@ export default function Home() {
     const holdings = portfolioHoldings[portfolioId] || [];
     const chains = getOrderedChainNodes(portfolioId);
 
-    // Flatten all chains into a single list of action node IDs
-    const allActionNodes = chains.flat();
+    // Flatten all chains into a single list of action node IDs, excluding disabled nodes
+    const allActionNodes = chains.flat().filter(id => !disabledNodes[id]);
 
     // Build a map of price overrides from all price targets in chains
     const priceOverrides = {};
@@ -2023,6 +2042,7 @@ export default function Home() {
     // Apply transformations in chain order
     for (const chain of chains) {
       for (const actionId of chain) {
+        if (disabledNodes[actionId]) continue;
         if (actionId.startsWith('rotate-')) {
           const rotation = rotations[actionId];
           if (!rotation) continue;
@@ -2161,7 +2181,7 @@ export default function Home() {
     }
 
     return projected.sort((a, b) => (b.value || 0) - (a.value || 0));
-  }, [portfolioHoldings, getOrderedChainNodes, rotations, sells, buys, priceTargets, allIns, yields]);
+  }, [portfolioHoldings, getOrderedChainNodes, rotations, sells, buys, priceTargets, allIns, yields, disabledNodes]);
 
   // Inject data and callbacks into nodes
   const nodesWithData = useMemo(() => {
@@ -2199,6 +2219,8 @@ export default function Home() {
             holdings,
             priceOverrides,
             savedInputs: rotationInputs[node.id],
+            isDisabled: !!disabledNodes[node.id],
+            onToggleDisabled: handleToggleNodeDisabled,
             onRotationChange: handleRotationChange,
             onInputChange: handleRotationInputChange,
             onRemove: handleRemoveRotation,
@@ -2215,6 +2237,8 @@ export default function Home() {
             ...node.data,
             holdings,
             savedInputs: sellInputs[node.id],
+            isDisabled: !!disabledNodes[node.id],
+            onToggleDisabled: handleToggleNodeDisabled,
             onSellChange: handleSellChange,
             onInputChange: handleSellInputChange,
             onRemove: handleRemoveSell,
@@ -2233,6 +2257,8 @@ export default function Home() {
             holdings,
             priceOverrides,
             savedInputs: buyInputs[node.id],
+            isDisabled: !!disabledNodes[node.id],
+            onToggleDisabled: handleToggleNodeDisabled,
             onBuyChange: handleBuyChange,
             onInputChange: handleBuyInputChange,
             onRemove: handleRemoveBuy,
@@ -2249,6 +2275,8 @@ export default function Home() {
             ...node.data,
             holdings,
             savedInputs: priceTargetInputs[node.id],
+            isDisabled: !!disabledNodes[node.id],
+            onToggleDisabled: handleToggleNodeDisabled,
             onPriceTargetChange: handlePriceTargetChange,
             onInputChange: handlePriceTargetInputChange,
             onRemove: handleRemovePriceTarget,
@@ -2267,6 +2295,8 @@ export default function Home() {
             holdings,
             priceOverrides,
             savedInputs: allInInputs[node.id],
+            isDisabled: !!disabledNodes[node.id],
+            onToggleDisabled: handleToggleNodeDisabled,
             onAllInChange: handleAllInChange,
             onInputChange: handleAllInInputChange,
             onRemove: handleRemoveAllIn,
@@ -2283,6 +2313,8 @@ export default function Home() {
             ...node.data,
             holdings,
             savedInputs: yieldInputs[node.id],
+            isDisabled: !!disabledNodes[node.id],
+            onToggleDisabled: handleToggleNodeDisabled,
             onYieldChange: handleYieldChange,
             onInputChange: handleYieldInputChange,
             onRemove: handleRemoveYield,
@@ -2341,7 +2373,7 @@ export default function Home() {
       }
       return node;
     });
-  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap]);
+  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap, disabledNodes, handleToggleNodeDisabled]);
 
   // Deduplicate edges to prevent React key warnings
   const uniqueEdges = useMemo(() => {
@@ -2394,6 +2426,7 @@ export default function Home() {
     setMarketCapSwapCount(0);
     setProjectedForPortfolio({});
     setProjectedCount(0);
+    setDisabledNodes({});
   }, [setNodes, setEdges]);
 
   // Handle manual edge connections

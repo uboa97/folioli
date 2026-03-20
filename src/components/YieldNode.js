@@ -16,7 +16,7 @@ function formatValue(value) {
 }
 
 export default function YieldNode({ data, id }) {
-  const { holdings = [], onYieldChange, onInputChange, onRemove, onAddChainedNode, savedInputs } = data;
+  const { holdings = [], onYieldChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled } = data;
   const onYieldChangeRef = useRef(onYieldChange);
   const onInputChangeRef = useRef(onInputChange);
   onYieldChangeRef.current = onYieldChange;
@@ -90,7 +90,7 @@ export default function YieldNode({ data, id }) {
   }, [asset, yieldType, yieldValue, yieldAmount, assetPrice, id]);
 
   return (
-    <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[280px]">
+    <div className={`bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[280px] ${isDisabled ? 'opacity-40' : ''}`}>
       <Handle
         type="target"
         position={Position.Left}
@@ -99,13 +99,22 @@ export default function YieldNode({ data, id }) {
 
       <div className="bg-purple-500 text-white px-4 py-2 rounded-t-lg font-semibold flex justify-between items-center">
         <span>Yield</span>
-        <button
-          onClick={() => onRemove?.(id)}
-          className="text-white/70 hover:text-white hover:bg-purple-600 rounded px-1.5 py-0.5 text-sm"
-          title="Remove yield"
-        >
-          x
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onToggleDisabled?.(id)}
+            className={`hover:text-white hover:bg-purple-600 rounded px-1.5 py-0.5 text-sm ${isDisabled ? 'text-white' : 'text-white/70'}`}
+            title={isDisabled ? 'Enable node' : 'Disable node'}
+          >
+            {isDisabled ? '○' : '●'}
+          </button>
+          <button
+            onClick={() => onRemove?.(id)}
+            className="text-white/70 hover:text-white hover:bg-purple-600 rounded px-1.5 py-0.5 text-sm"
+            title="Remove yield"
+          >
+            x
+          </button>
+        </div>
       </div>
 
       <div className="p-4 space-y-3">
