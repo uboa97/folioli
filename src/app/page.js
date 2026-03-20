@@ -107,6 +107,8 @@ export default function Home() {
   const [disabledNodes, setDisabledNodes] = useState({});
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [theme, setTheme] = useState('system'); // 'light', 'dark', 'system'
 
   const isInitialMount = useRef(true);
 
@@ -608,6 +610,57 @@ export default function Home() {
 
     loadAndRefresh();
   }, [setNodes, setEdges]);
+
+  // Theme: load from localStorage and apply dark class to <html>
+  useEffect(() => {
+    const saved = localStorage.getItem('folioli-theme') || 'system';
+    setTheme(saved);
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else if (theme === 'light') {
+      root.classList.remove('dark');
+    } else {
+      // system
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+    }
+    localStorage.setItem('folioli-theme', theme);
+
+    // Listen for system changes when in system mode
+    if (theme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const handler = (e) => {
+        if (e.matches) root.classList.add('dark');
+        else root.classList.remove('dark');
+      };
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    }
+  }, [theme]);
+
+  const isDark = useMemo(() => {
+    if (theme === 'dark') return true;
+    if (theme === 'light') return false;
+    if (typeof window !== 'undefined') {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return true;
+  }, [theme]);
+
+  const cycleTheme = useCallback(() => {
+    setTheme(prev => {
+      if (prev === 'system') return 'light';
+      if (prev === 'light') return 'dark';
+      return 'system';
+    });
+  }, []);
 
   // Save state to localStorage when it changes
   useEffect(() => {
@@ -2414,10 +2467,11 @@ export default function Home() {
 
   // Clear all state and reset to initial blank portfolio
   const handleClearAll = useCallback(() => {
-    if (!confirm('Are you sure you want to clear everything? This cannot be undone.')) {
-      return;
-    }
+    setShowClearConfirm(true);
+  }, []);
 
+  const executeClearAll = useCallback(() => {
+    setShowClearConfirm(false);
     setNodes([{
       id: INITIAL_PORTFOLIO_ID,
       type: 'portfolio',
@@ -2524,13 +2578,14 @@ export default function Home() {
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
         nodeTypes={nodeTypes}
+        colorMode={isDark ? 'dark' : 'light'}
         fitView
         fitViewOptions={{ padding: 0.3 }}
         defaultEdgeOptions={{
           type: 'smoothstep',
         }}
       >
-        <Background color="#2d2d2d" gap={20} size={1} />
+        <Background color={isDark ? "#2d2d2d" : "#d4d4d4"} gap={20} size={1} />
         <Controls />
         <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
           <div className="relative">
@@ -2588,14 +2643,43 @@ export default function Home() {
             {isRefreshingAll ? 'Refreshing...' : 'Refresh Prices'}
           </button>
         </div>
-        <div className="absolute top-4 right-4 z-10">
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+          <button
+            onClick={cycleTheme}
+            className="px-3 py-1.5 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 text-zinc-700 dark:text-white text-sm rounded shadow-lg transition-colors"
+            title={`Theme: ${theme}`}
+          >
+            {theme === 'light' ? '☀️' : theme === 'dark' ? '🌙' : '💻'}
+          </button>
           <button
             onClick={handleClearAll}
-            className="px-3 py-1.5 bg-zinc-700 hover:bg-red-600 text-white text-sm rounded shadow-lg transition-colors"
+            className="px-3 py-1.5 bg-zinc-300 dark:bg-zinc-700 hover:bg-red-600 text-zinc-700 dark:text-white hover:text-white text-sm rounded shadow-lg transition-colors"
           >
             Clear All
           </button>
         </div>
+        {showClearConfirm && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded-lg shadow-2xl p-6 max-w-sm mx-4">
+              <h3 className="text-zinc-900 dark:text-white text-lg font-semibold mb-2">Clear All</h3>
+              <p className="text-zinc-600 dark:text-zinc-300 text-sm mb-6">Are you sure you want to clear everything? This cannot be undone.</p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  className="px-4 py-2 bg-zinc-200 dark:bg-zinc-600 hover:bg-zinc-300 dark:hover:bg-zinc-500 text-zinc-700 dark:text-white text-sm rounded transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeClearAll}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+                >
+                  Clear All
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </ReactFlow>
     </div>
   );
