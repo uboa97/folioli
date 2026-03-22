@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { fetchPrice } from '@/lib/fetchPrice';
+import TickerSearch from './TickerSearch';
 
 function formatPrice(price) {
   if (price >= 1) {
@@ -174,20 +175,18 @@ export default function MarketCapSwapNode({ data, id }) {
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="block text-xs text-zinc-500 mb-1">Asset</label>
-            <input
-              type="text"
+            <TickerSearch
               value={fromAsset}
-              onChange={(e) => handleFromAssetChange(e.target.value)}
+              onChange={(val) => handleFromAssetChange(val)}
               className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               placeholder="e.g. BTC"
             />
           </div>
           <div>
             <label className="block text-xs text-zinc-500 mb-1">Use Market Cap Of</label>
-            <input
-              type="text"
+            <TickerSearch
               value={toAsset}
-              onChange={(e) => handleToAssetChange(e.target.value)}
+              onChange={(val) => handleToAssetChange(val)}
               className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               placeholder="e.g. ETH"
             />

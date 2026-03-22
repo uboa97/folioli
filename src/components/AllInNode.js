@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { fetchPrice } from '@/lib/fetchPrice';
+import TickerSearch from './TickerSearch';
 
 function formatPrice(price) {
   if (price >= 1) {
@@ -163,10 +164,9 @@ export default function AllInNode({ data, id }) {
 
         <div>
           <label className="block text-xs text-zinc-500 mb-1">Target Asset (ticker)</label>
-          <input
-            type="text"
+          <TickerSearch
             value={toAsset}
-            onChange={(e) => setToAsset(e.target.value.toUpperCase())}
+            onChange={(val) => setToAsset(val)}
             className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-yellow-500"
             placeholder="e.g. BTC, ETH, SPY"
           />

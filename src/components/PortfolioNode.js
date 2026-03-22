@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import MathInput from './MathInput';
+import TickerSearch from './TickerSearch';
 import { Handle, Position } from '@xyflow/react';
 import { fetchPrice } from '@/lib/fetchPrice';
 
@@ -190,14 +191,14 @@ export default function PortfolioNode({ data, id }) {
         )}
 
         <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Ticker"
+          <TickerSearch
             value={newTicker}
-            onChange={(e) => setNewTicker(e.target.value)}
+            onChange={(val) => setNewTicker(val)}
             onKeyDown={handleKeyDown}
             disabled={isLoading}
-            className="flex-1 px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            placeholder="Ticker"
+            wrapperClassName="flex-1"
+            className="w-full px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           />
           <MathInput
             placeholder="Amount"

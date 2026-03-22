@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import MathInput from './MathInput';
+import TickerSearch from './TickerSearch';
 import { fetchPrice } from '@/lib/fetchPrice';
 import { fetchHistoricalPrice } from '@/lib/fetchHistoricalPrice';
 
@@ -245,10 +246,9 @@ export default function TimeMachineNode({ data, id }) {
       <div className="p-4 space-y-3">
         <div>
           <label className="block text-xs text-zinc-500 mb-1">Asset</label>
-          <input
-            type="text"
+          <TickerSearch
             value={asset}
-            onChange={(e) => handleAssetChange(e.target.value)}
+            onChange={(val) => handleAssetChange(val)}
             className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             placeholder="e.g. BTC"
           />
