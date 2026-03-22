@@ -220,7 +220,7 @@ export default function RotateAssetNode({ data, id }) {
           <label className="block text-xs text-zinc-500 mb-1">Buy Asset (ticker)</label>
           <TickerSearch
             value={toAsset}
-            onChange={(val) => setToAsset(val)}
+            onSelect={(val) => setToAsset(val)}
             className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
             placeholder="e.g. ETH, AAPL"
           />

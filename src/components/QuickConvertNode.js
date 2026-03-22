@@ -103,6 +103,7 @@ export default function QuickConvertNode({ data, id }) {
 
   const handleFromAssetChange = (value) => {
     const nextValue = value.toUpperCase();
+    if (nextValue === fromAsset) return;
     const direct = getDirectPrice(nextValue);
     setIsFetchingFromPrice(false);
     setFromAsset(nextValue);
@@ -122,6 +123,7 @@ export default function QuickConvertNode({ data, id }) {
 
   const handleToAssetChange = (value) => {
     const nextValue = value.toUpperCase();
+    if (nextValue === toAsset) return;
     const direct = getDirectPrice(nextValue);
     setIsFetchingToPrice(false);
     setToAsset(nextValue);
@@ -158,7 +160,7 @@ export default function QuickConvertNode({ data, id }) {
             <label className="block text-xs text-zinc-500 mb-1">From Asset</label>
             <TickerSearch
               value={fromAsset}
-              onChange={(val) => handleFromAssetChange(val)}
+              onSelect={(val) => handleFromAssetChange(val)}
               className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="e.g. BTC"
             />
@@ -167,7 +169,7 @@ export default function QuickConvertNode({ data, id }) {
             <label className="block text-xs text-zinc-500 mb-1">To Asset</label>
             <TickerSearch
               value={toAsset}
-              onChange={(val) => handleToAssetChange(val)}
+              onSelect={(val) => handleToAssetChange(val)}
               className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="e.g. ETH"
             />

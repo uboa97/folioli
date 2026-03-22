@@ -195,6 +195,7 @@ export default function TimeMachineNode({ data, id }) {
 
   const handleAssetChange = (value) => {
     const nextValue = value.toUpperCase();
+    if (nextValue === asset) return;
     const direct = getDirectPrice(nextValue);
 
     setAsset(nextValue);
@@ -248,7 +249,7 @@ export default function TimeMachineNode({ data, id }) {
           <label className="block text-xs text-zinc-500 mb-1">Asset</label>
           <TickerSearch
             value={asset}
-            onChange={(val) => handleAssetChange(val)}
+            onSelect={(val) => handleAssetChange(val)}
             className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             placeholder="e.g. BTC"
           />

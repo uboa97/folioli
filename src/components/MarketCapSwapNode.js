@@ -112,6 +112,7 @@ export default function MarketCapSwapNode({ data, id }) {
 
   const handleFromAssetChange = (value) => {
     const nextValue = value.toUpperCase();
+    if (nextValue === fromAsset) return;
     const direct = getDirectAssetData(nextValue);
     setIsFetchingFromData(false);
     setFromAsset(nextValue);
@@ -134,6 +135,7 @@ export default function MarketCapSwapNode({ data, id }) {
 
   const handleToAssetChange = (value) => {
     const nextValue = value.toUpperCase();
+    if (nextValue === toAsset) return;
     const direct = getDirectAssetData(nextValue);
     setIsFetchingToData(false);
     setToAsset(nextValue);
@@ -177,7 +179,7 @@ export default function MarketCapSwapNode({ data, id }) {
             <label className="block text-xs text-zinc-500 mb-1">Asset</label>
             <TickerSearch
               value={fromAsset}
-              onChange={(val) => handleFromAssetChange(val)}
+              onSelect={(val) => handleFromAssetChange(val)}
               className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               placeholder="e.g. BTC"
             />
@@ -186,7 +188,7 @@ export default function MarketCapSwapNode({ data, id }) {
             <label className="block text-xs text-zinc-500 mb-1">Use Market Cap Of</label>
             <TickerSearch
               value={toAsset}
-              onChange={(val) => handleToAssetChange(val)}
+              onSelect={(val) => handleToAssetChange(val)}
               className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
               placeholder="e.g. ETH"
             />

@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 export default function TickerSearch({
   value,
   onChange,
+  onSelect,
   onKeyDown,
   className = '',
   wrapperClassName = '',
@@ -18,16 +19,19 @@ export default function TickerSearch({
   const [isLoading, setIsLoading] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [dropdownPos, setDropdownPos] = useState(null);
+  const [isFocused, setIsFocused] = useState(false);
   const wrapperRef = useRef(null);
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
   const requestIdRef = useRef(0);
   const debounceRef = useRef(null);
 
-  // Sync external value changes
+  // Sync external value changes only when not focused (user isn't typing)
   useEffect(() => {
-    setQuery(value || '');
-  }, [value]);
+    if (!isFocused) {
+      setQuery(value || '');
+    }
+  }, [value, isFocused]);
 
   // Position the portal dropdown below the input
   const updateDropdownPos = useCallback(() => {
@@ -77,7 +81,8 @@ export default function TickerSearch({
   const handleInputChange = (e) => {
     const val = e.target.value.toUpperCase();
     setQuery(val);
-    onChange(val);
+    // onChange fires on every keystroke (for PortfolioNode's "Add" button)
+    onChange?.(val);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -85,14 +90,15 @@ export default function TickerSearch({
     }, 300);
   };
 
-  const selectResult = useCallback((symbol) => {
+  const commitSelection = useCallback((symbol) => {
     // Yahoo crypto comes as "ETH-USD", "BTC-USD" — strip the -USD/-EUR etc. suffix
     let ticker = symbol.replace(/-(USD|EUR|GBP|BTC|ETH|USDT)$/, '');
     setQuery(ticker);
-    onChange(ticker);
+    onChange?.(ticker);
+    onSelect?.(ticker);
     setIsOpen(false);
     setResults([]);
-  }, [onChange]);
+  }, [onChange, onSelect]);
 
   const handleKeyDownInternal = (e) => {
     if (isOpen && results.length > 0) {
@@ -108,7 +114,7 @@ export default function TickerSearch({
       }
       if (e.key === 'Enter' && highlightIndex >= 0) {
         e.preventDefault();
-        selectResult(results[highlightIndex].symbol);
+        commitSelection(results[highlightIndex].symbol);
         return;
       }
       if (e.key === 'Escape') {
@@ -161,7 +167,7 @@ export default function TickerSearch({
           onPointerDown={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            selectResult(item.symbol);
+            commitSelection(item.symbol);
           }}
           className={`w-full text-left px-3 py-1.5 text-sm flex items-center justify-between cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 ${
             i === highlightIndex ? 'bg-zinc-100 dark:bg-zinc-700' : ''
@@ -189,11 +195,13 @@ export default function TickerSearch({
         onChange={handleInputChange}
         onKeyDown={handleKeyDownInternal}
         onFocus={() => {
+          setIsFocused(true);
           if (results.length > 0) {
             updateDropdownPos();
             setIsOpen(true);
           }
         }}
+        onBlur={() => setIsFocused(false)}
         disabled={disabled}
         className={className}
         placeholder={placeholder}

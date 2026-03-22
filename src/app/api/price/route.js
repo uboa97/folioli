@@ -223,6 +223,8 @@ export async function GET(request) {
       return Response.json({ error: 'Date cannot be in the future.' }, { status: 400 });
     }
 
+    const isKnownCrypto = !!CRYPTO_IDS[symbol.toUpperCase()];
+
     const cryptoHistoricalData = await fetchCryptoHistoricalData(symbol, targetDate);
     if (cryptoHistoricalData) {
       return Response.json({
@@ -233,18 +235,23 @@ export async function GET(request) {
       });
     }
 
-    const stockHistoricalData = await fetchStockHistoricalData(symbol, targetDate);
-    if (stockHistoricalData) {
-      return Response.json({
-        price: stockHistoricalData.price,
-        marketCap: null,
-        type: 'stock',
-        resolvedDate: stockHistoricalData.resolvedDate,
-      });
+    // Don't fall back to stock for known crypto tickers (avoids returning wrong asset)
+    if (!isKnownCrypto) {
+      const stockHistoricalData = await fetchStockHistoricalData(symbol, targetDate);
+      if (stockHistoricalData) {
+        return Response.json({
+          price: stockHistoricalData.price,
+          marketCap: null,
+          type: 'stock',
+          resolvedDate: stockHistoricalData.resolvedDate,
+        });
+      }
     }
 
     return Response.json({ price: null, marketCap: null, type: 'unknown', resolvedDate: null });
   }
+
+  const isKnownCrypto = !!CRYPTO_IDS[symbol.toUpperCase()];
 
   // Try crypto first
   const cryptoData = await fetchCryptoData(symbol);
@@ -256,14 +263,16 @@ export async function GET(request) {
     });
   }
 
-  // Fall back to stock
-  const stockData = await fetchStockData(symbol);
-  if (stockData && stockData.price !== null) {
-    return Response.json({
-      price: stockData.price,
-      marketCap: stockData.marketCap,
-      type: 'stock'
-    });
+  // Don't fall back to stock for known crypto tickers (avoids returning wrong asset)
+  if (!isKnownCrypto) {
+    const stockData = await fetchStockData(symbol);
+    if (stockData && stockData.price !== null) {
+      return Response.json({
+        price: stockData.price,
+        marketCap: stockData.marketCap,
+        type: 'stock'
+      });
+    }
   }
 
   return Response.json({ price: null, marketCap: null, type: 'unknown' });
