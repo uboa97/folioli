@@ -107,6 +107,7 @@ export default function Home() {
   const [disabledNodes, setDisabledNodes] = useState({});
   const [isRefreshingAll, setIsRefreshingAll] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const reactFlowInstanceRef = useRef(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [theme, setTheme] = useState('system'); // 'light', 'dark', 'system'
 
@@ -991,6 +992,17 @@ export default function Home() {
   }, []);
 
   // Helper to check if a node is an action node
+  // Get the center of the current viewport in flow coordinates
+  const getViewportCenter = useCallback(() => {
+    const rf = reactFlowInstanceRef.current;
+    if (!rf) return { x: 100, y: 150 };
+    const { x, y, zoom } = rf.getViewport();
+    // viewport transform: screenX = flowX * zoom + x, so flowX = (screenX - x) / zoom
+    const centerX = (window.innerWidth / 2 - x) / zoom;
+    const centerY = (window.innerHeight / 2 - y) / zoom;
+    return { x: Math.round(centerX), y: Math.round(centerY) };
+  }, []);
+
   const isActionNode = useCallback((nodeId) => {
     return nodeId.startsWith('rotate-') ||
            nodeId.startsWith('sell-') ||
@@ -1374,16 +1386,14 @@ export default function Home() {
     const newPortfolioId = `portfolio-${portfolioCount + 1}`;
     setPortfolioCount(prev => prev + 1);
 
-    // Find a good position for the new portfolio (below existing ones)
-    const portfolioNodes = nodes.filter(n => n.type === 'portfolio');
-    const maxY = portfolioNodes.reduce((max, n) => Math.max(max, n.position.y), 0);
+    const center = getViewportCenter();
 
     setNodes(prev => [
       ...prev,
       {
         id: newPortfolioId,
         type: 'portfolio',
-        position: { x: 100, y: maxY + 400 },
+        position: { x: center.x - 160, y: center.y - 100 },
         data: {},
       },
     ]);
@@ -1394,70 +1404,64 @@ export default function Home() {
     }));
 
     setShowAddMenu(false);
-  }, [portfolioCount, nodes, setNodes]);
+  }, [portfolioCount, setNodes, getViewportCenter]);
 
   const handleAddQuickConvert = useCallback(() => {
     const newQuickConvertId = `quickConvert-${quickConvertCount + 1}`;
     setQuickConvertCount(prev => prev + 1);
 
-    const existingQuickConverts = nodes.filter(n => n.type === 'quickConvert');
-    const maxY = existingQuickConverts.reduce((max, n) => Math.max(max, n.position.y), 0);
-    const baseY = existingQuickConverts.length > 0 ? maxY + 260 : 150;
+    const center = getViewportCenter();
 
     setNodes(prev => [
       ...prev,
       {
         id: newQuickConvertId,
         type: 'quickConvert',
-        position: { x: 520, y: baseY },
+        position: { x: center.x - 150, y: center.y - 100 },
         data: {},
       },
     ]);
 
     setShowAddMenu(false);
-  }, [quickConvertCount, nodes, setNodes]);
+  }, [quickConvertCount, setNodes, getViewportCenter]);
 
   const handleAddTimeMachine = useCallback(() => {
     const newTimeMachineId = `timeMachine-${timeMachineCount + 1}`;
     setTimeMachineCount(prev => prev + 1);
 
-    const existingTimeMachines = nodes.filter(n => n.type === 'timeMachine');
-    const maxY = existingTimeMachines.reduce((max, n) => Math.max(max, n.position.y), 0);
-    const baseY = existingTimeMachines.length > 0 ? maxY + 290 : 150;
+    const center = getViewportCenter();
 
     setNodes(prev => [
       ...prev,
       {
         id: newTimeMachineId,
         type: 'timeMachine',
-        position: { x: 900, y: baseY },
+        position: { x: center.x - 165, y: center.y - 100 },
         data: {},
       },
     ]);
 
     setShowAddMenu(false);
-  }, [timeMachineCount, nodes, setNodes]);
+  }, [timeMachineCount, setNodes, getViewportCenter]);
 
   const handleAddMarketCapSwap = useCallback(() => {
     const newMarketCapSwapId = `marketCapSwap-${marketCapSwapCount + 1}`;
     setMarketCapSwapCount(prev => prev + 1);
 
-    const existingMarketCapSwaps = nodes.filter(n => n.type === 'marketCapSwap');
-    const maxY = existingMarketCapSwaps.reduce((max, n) => Math.max(max, n.position.y), 0);
-    const baseY = existingMarketCapSwaps.length > 0 ? maxY + 260 : 150;
+    const center = getViewportCenter();
 
     setNodes(prev => [
       ...prev,
       {
         id: newMarketCapSwapId,
         type: 'marketCapSwap',
-        position: { x: 1280, y: baseY },
+        position: { x: center.x - 165, y: center.y - 100 },
         data: {},
       },
     ]);
 
     setShowAddMenu(false);
-  }, [marketCapSwapCount, nodes, setNodes]);
+  }, [marketCapSwapCount, setNodes, getViewportCenter]);
 
   // Duplicate a portfolio node with its holdings
   const handleDuplicatePortfolio = useCallback((sourceNodeId) => {
@@ -2577,6 +2581,7 @@ export default function Home() {
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
+        onInit={(instance) => { reactFlowInstanceRef.current = instance; }}
         nodeTypes={nodeTypes}
         colorMode={isDark ? 'dark' : 'light'}
         fitView
