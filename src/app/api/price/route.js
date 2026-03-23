@@ -151,12 +151,13 @@ async function fetchCryptoHistoricalData(symbol, targetDate) {
 
 async function fetchStockData(symbol) {
   try {
-    const result = await yf.quoteSummary(symbol, {
-      modules: ['price', 'summaryDetail']
-    });
+    const quote = await yf.quote(symbol);
 
-    const price = result.price?.regularMarketPrice ?? null;
-    const marketCap = result.price?.marketCap ?? null;
+    const regularPrice = quote?.regularMarketPrice ?? null;
+    const marketCap = quote?.marketCap ?? null;
+
+    // Prefer extended hours price (pre-market or after-hours) when available
+    const price = quote?.preMarketPrice ?? quote?.postMarketPrice ?? regularPrice;
 
     return { price, marketCap };
   } catch {
