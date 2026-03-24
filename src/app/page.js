@@ -40,6 +40,27 @@ const nodeTypes = {
 
 const INITIAL_PORTFOLIO_ID = 'portfolio-1';
 const STORAGE_KEY = 'folioli-state';
+const LAYOUTS_KEY = 'folioli-layouts';
+
+function loadLayouts() {
+  if (typeof window === 'undefined') return { layouts: {}, currentLayout: null };
+  try {
+    const saved = localStorage.getItem(LAYOUTS_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch (e) {
+    console.error('Failed to load layouts:', e);
+  }
+  return { layouts: {}, currentLayout: null };
+}
+
+function saveLayouts(data) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LAYOUTS_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error('Failed to save layouts:', e);
+  }
+}
 
 const defaultNodes = [
   {
@@ -110,6 +131,15 @@ export default function Home() {
   const reactFlowInstanceRef = useRef(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [theme, setTheme] = useState('system'); // 'light', 'dark', 'system'
+  const [layouts, setLayouts] = useState({});
+  const [currentLayout, setCurrentLayout] = useState(null);
+  const [showLayoutMenu, setShowLayoutMenu] = useState(false);
+  const [layoutNameInput, setLayoutNameInput] = useState('');
+  const [showSaveLayoutDialog, setShowSaveLayoutDialog] = useState(false);
+  const [showRenameLayoutDialog, setShowRenameLayoutDialog] = useState(false);
+  const [renameTarget, setRenameTarget] = useState(null);
+  const [renameInput, setRenameInput] = useState('');
+  const [layoutVersion, setLayoutVersion] = useState(0);
 
   const isInitialMount = useRef(true);
 
@@ -2514,6 +2544,203 @@ export default function Home() {
     setDisabledNodes({});
   }, [setNodes, setEdges]);
 
+  // --- Layout management ---
+
+  const getSnapshot = useCallback(() => {
+    const nodesToSave = nodes.map(node => ({
+      id: node.id,
+      type: node.type,
+      position: node.position,
+      data: {},
+    }));
+    return {
+      nodes: nodesToSave,
+      edges,
+      portfolioHoldings,
+      portfolioCount,
+      rotations,
+      rotationInputs,
+      rotationCount,
+      sells,
+      sellInputs,
+      sellCount,
+      buys,
+      buyInputs,
+      buyCount,
+      priceTargets,
+      priceTargetInputs,
+      priceTargetCount,
+      allIns,
+      allInInputs,
+      allInCount,
+      yields,
+      yieldInputs,
+      yieldCount,
+      quickConvertInputs,
+      quickConvertCount,
+      timeMachineInputs,
+      timeMachineCount,
+      marketCapSwapInputs,
+      marketCapSwapCount,
+      projectedForPortfolio,
+      projectedCount,
+      disabledNodes,
+    };
+  }, [nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, projectedForPortfolio, projectedCount, disabledNodes]);
+
+  const restoreSnapshot = useCallback((saved) => {
+    if (!saved) return;
+    if (saved.nodes) setNodes(saved.nodes);
+    if (saved.edges) setEdges(saved.edges);
+    if (saved.portfolioHoldings) setPortfolioHoldings(saved.portfolioHoldings);
+    setPortfolioCount(saved.portfolioCount ?? 1);
+    setRotations(saved.rotations ?? {});
+    setRotationInputs(saved.rotationInputs ?? {});
+    setRotationCount(saved.rotationCount ?? 0);
+    setSells(saved.sells ?? {});
+    setSellInputs(saved.sellInputs ?? {});
+    setSellCount(saved.sellCount ?? 0);
+    setBuys(saved.buys ?? {});
+    setBuyInputs(saved.buyInputs ?? {});
+    setBuyCount(saved.buyCount ?? 0);
+    setPriceTargets(saved.priceTargets ?? {});
+    setPriceTargetInputs(saved.priceTargetInputs ?? {});
+    setPriceTargetCount(saved.priceTargetCount ?? 0);
+    setAllIns(saved.allIns ?? {});
+    setAllInInputs(saved.allInInputs ?? {});
+    setAllInCount(saved.allInCount ?? 0);
+    setYields(saved.yields ?? {});
+    setYieldInputs(saved.yieldInputs ?? {});
+    setYieldCount(saved.yieldCount ?? 0);
+    setQuickConvertInputs(saved.quickConvertInputs ?? {});
+    setQuickConvertCount(saved.quickConvertCount ?? 0);
+    setTimeMachineInputs(saved.timeMachineInputs ?? {});
+    setTimeMachineCount(saved.timeMachineCount ?? 0);
+    setMarketCapSwapInputs(saved.marketCapSwapInputs ?? {});
+    setMarketCapSwapCount(saved.marketCapSwapCount ?? 0);
+    setProjectedForPortfolio(saved.projectedForPortfolio ?? {});
+    setProjectedCount(saved.projectedCount ?? 0);
+    setDisabledNodes(saved.disabledNodes ?? {});
+    setLayoutVersion(v => v + 1);
+  }, [setNodes, setEdges]);
+
+  // Load layouts from localStorage on mount
+  useEffect(() => {
+    const data = loadLayouts();
+    setLayouts(data.layouts || {});
+    setCurrentLayout(data.currentLayout || null);
+  }, []);
+
+  // Persist layouts whenever they change
+  const persistLayouts = useCallback((nextLayouts, nextCurrent) => {
+    setLayouts(nextLayouts);
+    setCurrentLayout(nextCurrent);
+    saveLayouts({ layouts: nextLayouts, currentLayout: nextCurrent });
+  }, []);
+
+  const handleSaveLayout = useCallback((name) => {
+    if (!name.trim()) return;
+    const trimmed = name.trim();
+    const snapshot = getSnapshot();
+    const nextLayouts = { ...layouts, [trimmed]: snapshot };
+    persistLayouts(nextLayouts, trimmed);
+    setShowSaveLayoutDialog(false);
+    setLayoutNameInput('');
+  }, [getSnapshot, layouts, persistLayouts]);
+
+  const handleLoadLayout = useCallback((name) => {
+    if (name === currentLayout) {
+      setShowLayoutMenu(false);
+      return;
+    }
+    // Auto-save current layout before switching
+    const snapshot = getSnapshot();
+    const nextLayouts = currentLayout
+      ? { ...layouts, [currentLayout]: snapshot }
+      : { ...layouts };
+    const data = nextLayouts[name];
+    if (data) {
+      restoreSnapshot(data);
+      persistLayouts(nextLayouts, name);
+    }
+    setShowLayoutMenu(false);
+  }, [currentLayout, getSnapshot, layouts, restoreSnapshot, persistLayouts]);
+
+  const handleDeleteLayout = useCallback((name) => {
+    const nextLayouts = { ...layouts };
+    delete nextLayouts[name];
+    const nextCurrent = currentLayout === name ? null : currentLayout;
+    persistLayouts(nextLayouts, nextCurrent);
+  }, [layouts, currentLayout, persistLayouts]);
+
+  const handleRenameLayout = useCallback((oldName, newName) => {
+    if (!newName.trim() || newName.trim() === oldName) {
+      setShowRenameLayoutDialog(false);
+      return;
+    }
+    const trimmed = newName.trim();
+    const nextLayouts = { ...layouts };
+    nextLayouts[trimmed] = nextLayouts[oldName];
+    delete nextLayouts[oldName];
+    const nextCurrent = currentLayout === oldName ? trimmed : currentLayout;
+    persistLayouts(nextLayouts, nextCurrent);
+    setShowRenameLayoutDialog(false);
+    setRenameTarget(null);
+    setRenameInput('');
+  }, [layouts, currentLayout, persistLayouts]);
+
+  const handleNewLayout = useCallback(() => {
+    // Auto-save current layout before creating new blank
+    if (currentLayout) {
+      const snapshot = getSnapshot();
+      const nextLayouts = { ...layouts, [currentLayout]: snapshot };
+      setLayouts(nextLayouts);
+      saveLayouts({ layouts: nextLayouts, currentLayout: null });
+    }
+    // Reset to blank state
+    setNodes([{
+      id: INITIAL_PORTFOLIO_ID,
+      type: 'portfolio',
+      position: { x: 100, y: 150 },
+      data: {},
+    }]);
+    setEdges([]);
+    setPortfolioHoldings({ [INITIAL_PORTFOLIO_ID]: [] });
+    setPortfolioCount(1);
+    setRotations({});
+    setRotationInputs({});
+    setRotationCount(0);
+    setSells({});
+    setSellInputs({});
+    setSellCount(0);
+    setBuys({});
+    setBuyInputs({});
+    setBuyCount(0);
+    setPriceTargets({});
+    setPriceTargetInputs({});
+    setPriceTargetCount(0);
+    setAllIns({});
+    setAllInInputs({});
+    setAllInCount(0);
+    setYields({});
+    setYieldInputs({});
+    setYieldCount(0);
+    setQuickConvertInputs({});
+    setQuickConvertCount(0);
+    setTimeMachineInputs({});
+    setTimeMachineCount(0);
+    setMarketCapSwapInputs({});
+    setMarketCapSwapCount(0);
+    setProjectedForPortfolio({});
+    setProjectedCount(0);
+    setDisabledNodes({});
+    setCurrentLayout(null);
+    setShowLayoutMenu(false);
+    // Show save dialog so they can name it
+    setShowSaveLayoutDialog(true);
+    setLayoutNameInput('');
+  }, [currentLayout, getSnapshot, layouts, setNodes, setEdges]);
+
   // Handle manual edge connections
   const handleConnect = useCallback((connection) => {
     const { source, target } = connection;
@@ -2576,6 +2803,7 @@ export default function Home() {
   return (
     <div className="w-screen h-screen">
       <ReactFlow
+        key={layoutVersion}
         nodes={nodesWithData}
         edges={uniqueEdges}
         onNodesChange={handleNodesChange}
@@ -2649,6 +2877,93 @@ export default function Home() {
           </button>
         </div>
         <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+          {/* Layouts */}
+          <div className="relative">
+            <button
+              onClick={() => setShowLayoutMenu(prev => !prev)}
+              className="px-3 py-1.5 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 text-zinc-700 dark:text-white text-sm rounded shadow-lg transition-colors flex items-center gap-1.5"
+            >
+              <span className="text-xs">&#9776;</span>
+              {currentLayout || 'Layouts'}
+            </button>
+            {showLayoutMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowLayoutMenu(false)}
+                />
+                <div className="absolute top-full right-0 mt-1 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded shadow-lg z-20 min-w-[200px]">
+                  {Object.keys(layouts).length > 0 && (
+                    <div className="border-b border-zinc-200 dark:border-zinc-700 max-h-[240px] overflow-y-auto">
+                      {Object.keys(layouts).map(name => (
+                        <div
+                          key={name}
+                          className={`flex items-center gap-1 px-3 py-2 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 group ${name === currentLayout ? 'bg-zinc-100 dark:bg-zinc-700 font-semibold' : ''}`}
+                        >
+                          <button
+                            onClick={() => handleLoadLayout(name)}
+                            className="flex-1 text-left text-zinc-800 dark:text-zinc-200 truncate"
+                          >
+                            {name}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRenameTarget(name);
+                              setRenameInput(name);
+                              setShowRenameLayoutDialog(true);
+                              setShowLayoutMenu(false);
+                            }}
+                            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 text-xs opacity-0 group-hover:opacity-100 px-1"
+                            title="Rename"
+                          >
+                            &#9998;
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteLayout(name);
+                            }}
+                            className="text-zinc-400 hover:text-red-500 text-xs opacity-0 group-hover:opacity-100 px-1"
+                            title="Delete"
+                          >
+                            &#10005;
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      setShowLayoutMenu(false);
+                      setLayoutNameInput('');
+                      setShowSaveLayoutDialog(true);
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300"
+                  >
+                    Save as...
+                  </button>
+                  {currentLayout && (
+                    <button
+                      onClick={() => {
+                        handleSaveLayout(currentLayout);
+                        setShowLayoutMenu(false);
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300"
+                    >
+                      Save &quot;{currentLayout}&quot;
+                    </button>
+                  )}
+                  <button
+                    onClick={handleNewLayout}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 border-t border-zinc-200 dark:border-zinc-700"
+                  >
+                    New layout
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={cycleTheme}
             className="px-3 py-1.5 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 text-zinc-700 dark:text-white text-sm rounded shadow-lg transition-colors"
@@ -2680,6 +2995,71 @@ export default function Home() {
                   className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
                 >
                   Clear All
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showSaveLayoutDialog && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded-lg shadow-2xl p-6 max-w-sm mx-4">
+              <h3 className="text-zinc-900 dark:text-white text-lg font-semibold mb-2">Save Layout</h3>
+              <input
+                type="text"
+                value={layoutNameInput}
+                onChange={(e) => setLayoutNameInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveLayout(layoutNameInput); if (e.key === 'Escape') setShowSaveLayoutDialog(false); }}
+                className="w-full px-3 py-2 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+                placeholder="Layout name"
+                autoFocus
+              />
+              {layoutNameInput.trim() && layouts[layoutNameInput.trim()] && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mb-3">This will overwrite the existing &quot;{layoutNameInput.trim()}&quot; layout.</p>
+              )}
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowSaveLayoutDialog(false)}
+                  className="px-4 py-2 bg-zinc-200 dark:bg-zinc-600 hover:bg-zinc-300 dark:hover:bg-zinc-500 text-zinc-700 dark:text-white text-sm rounded transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleSaveLayout(layoutNameInput)}
+                  disabled={!layoutNameInput.trim()}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white text-sm rounded transition-colors"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showRenameLayoutDialog && renameTarget && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded-lg shadow-2xl p-6 max-w-sm mx-4">
+              <h3 className="text-zinc-900 dark:text-white text-lg font-semibold mb-2">Rename Layout</h3>
+              <input
+                type="text"
+                value={renameInput}
+                onChange={(e) => setRenameInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleRenameLayout(renameTarget, renameInput); if (e.key === 'Escape') setShowRenameLayoutDialog(false); }}
+                className="w-full px-3 py-2 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+                placeholder="New name"
+                autoFocus
+              />
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowRenameLayoutDialog(false)}
+                  className="px-4 py-2 bg-zinc-200 dark:bg-zinc-600 hover:bg-zinc-300 dark:hover:bg-zinc-500 text-zinc-700 dark:text-white text-sm rounded transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleRenameLayout(renameTarget, renameInput)}
+                  disabled={!renameInput.trim()}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white text-sm rounded transition-colors"
+                >
+                  Rename
                 </button>
               </div>
             </div>
