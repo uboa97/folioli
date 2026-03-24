@@ -18,6 +18,21 @@ function formatMarketCap(value) {
   return `$${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
+function parseMarketCapInput(value) {
+  if (!value) return null;
+  const str = value.trim().toUpperCase();
+  const match = str.match(/^(\d+\.?\d*)\s*(T|B|M|K)?$/);
+  if (!match) return null;
+  const num = parseFloat(match[1]);
+  if (isNaN(num) || num <= 0) return null;
+  const suffix = match[2];
+  if (suffix === 'T') return num * 1e12;
+  if (suffix === 'B') return num * 1e9;
+  if (suffix === 'M') return num * 1e6;
+  if (suffix === 'K') return num * 1e3;
+  return num;
+}
+
 function getDirectAssetData(ticker) {
   if (!ticker) return null;
   const key = ticker.toUpperCase().trim();
@@ -32,8 +47,10 @@ export default function MarketCapSwapNode({ data, id }) {
   const savedFromDirectData = getDirectAssetData(savedInputs?.fromAsset);
   const savedToDirectData = getDirectAssetData(savedInputs?.toAsset);
 
+  const [mode, setMode] = useState(savedInputs?.mode || 'swap');
   const [fromAsset, setFromAsset] = useState(savedInputs?.fromAsset || '');
   const [toAsset, setToAsset] = useState(savedInputs?.toAsset || '');
+  const [customMarketCapInput, setCustomMarketCapInput] = useState(savedInputs?.customMarketCapInput || '');
   const [fromPrice, setFromPrice] = useState(savedInputs?.fromPrice ?? savedFromDirectData?.price ?? null);
   const [toPrice, setToPrice] = useState(savedInputs?.toPrice ?? savedToDirectData?.price ?? null);
   const [fromMarketCap, setFromMarketCap] = useState(savedInputs?.fromMarketCap ?? savedFromDirectData?.marketCap ?? null);
@@ -71,6 +88,7 @@ export default function MarketCapSwapNode({ data, id }) {
   }, [fromAsset]);
 
   useEffect(() => {
+    if (mode !== 'swap') return;
     const requestId = ++toRequestIdRef.current;
 
     const assetKey = toAsset.toUpperCase().trim();
@@ -93,13 +111,15 @@ export default function MarketCapSwapNode({ data, id }) {
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [toAsset]);
+  }, [toAsset, mode]);
 
   useEffect(() => {
     if (onInputChange) {
       onInputChange(id, {
+        mode,
         fromAsset,
         toAsset,
+        customMarketCapInput,
         fromPrice,
         toPrice,
         fromMarketCap,
@@ -108,7 +128,7 @@ export default function MarketCapSwapNode({ data, id }) {
         toType,
       });
     }
-  }, [id, fromAsset, toAsset, fromPrice, toPrice, fromMarketCap, toMarketCap, fromType, toType, onInputChange]);
+  }, [id, mode, fromAsset, toAsset, customMarketCapInput, fromPrice, toPrice, fromMarketCap, toMarketCap, fromType, toType, onInputChange]);
 
   const handleFromAssetChange = (value) => {
     const nextValue = value.toUpperCase();
@@ -156,25 +176,49 @@ export default function MarketCapSwapNode({ data, id }) {
     setToType(null);
   };
 
-  const swappedPrice = fromPrice !== null && fromMarketCap && toMarketCap !== null
-    ? fromPrice * (toMarketCap / fromMarketCap)
+  const parsedCustomMarketCap = parseMarketCapInput(customMarketCapInput);
+  const targetMarketCap = mode === 'swap' ? toMarketCap : parsedCustomMarketCap;
+
+  const swappedPrice = fromPrice !== null && fromMarketCap && targetMarketCap
+    ? fromPrice * (targetMarketCap / fromMarketCap)
     : null;
+
+  const resultLabel = mode === 'swap' && toAsset
+    ? (<>If <span className="font-semibold">{fromAsset.toUpperCase()}</span> had <span className="font-semibold">{toAsset.toUpperCase()}</span> market cap, its price would be:</>)
+    : targetMarketCap ? (<>If <span className="font-semibold">{fromAsset.toUpperCase()}</span> had a <span className="font-semibold">{formatMarketCap(targetMarketCap)}</span> market cap, its price would be:</>) : null;
+
+  const hasTarget = mode === 'swap' ? !!toAsset : parsedCustomMarketCap !== null;
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[330px]">
       <div className="bg-cyan-600 text-white px-4 py-2 rounded-t-lg font-semibold flex justify-between items-center">
-        <span>Market Cap Swap</span>
+        <span>Market Cap Tool</span>
         <button
           onClick={() => onRemove?.(id)}
           className="text-white/70 hover:text-white hover:bg-cyan-700 rounded px-1.5 py-0.5 text-sm"
-          title="Remove market cap swap"
+          title="Remove market cap tool"
         >
           x
         </button>
       </div>
 
       <div className="p-4 space-y-3">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="flex gap-1">
+          <button
+            onClick={() => setMode('swap')}
+            className={`flex-1 px-2 py-1 text-xs rounded ${mode === 'swap' ? 'bg-cyan-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'}`}
+          >
+            Swap with Asset
+          </button>
+          <button
+            onClick={() => setMode('custom')}
+            className={`flex-1 px-2 py-1 text-xs rounded ${mode === 'custom' ? 'bg-cyan-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'}`}
+          >
+            Custom Market Cap
+          </button>
+        </div>
+
+        <div className={mode === 'swap' ? 'grid grid-cols-2 gap-2' : ''}>
           <div>
             <label className="block text-xs text-zinc-500 mb-1">Asset</label>
             <TickerSearch
@@ -184,15 +228,39 @@ export default function MarketCapSwapNode({ data, id }) {
               placeholder="e.g. BTC"
             />
           </div>
-          <div>
-            <label className="block text-xs text-zinc-500 mb-1">Use Market Cap Of</label>
-            <TickerSearch
-              value={toAsset}
-              onSelect={(val) => handleToAssetChange(val)}
-              className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              placeholder="e.g. ETH"
-            />
-          </div>
+          {mode === 'swap' && (
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1">Use Market Cap Of</label>
+              <TickerSearch
+                value={toAsset}
+                onSelect={(val) => handleToAssetChange(val)}
+                className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                placeholder="e.g. ETH"
+              />
+            </div>
+          )}
+          {mode === 'custom' && (
+            <div className="mt-2">
+              <label className="block text-xs text-zinc-500 mb-1">Target Market Cap (e.g. 500B, 1.5T, 200M)</label>
+              <input
+                type="text"
+                value={customMarketCapInput}
+                onChange={(e) => setCustomMarketCapInput(e.target.value)}
+                className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                placeholder="e.g. 500B"
+              />
+              {customMarketCapInput && parsedCustomMarketCap === null && (
+                <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  Use a number with optional suffix: K, M, B, T
+                </div>
+              )}
+              {parsedCustomMarketCap !== null && (
+                <div className="text-xs text-zinc-500 mt-1">
+                  = {formatMarketCap(parsedCustomMarketCap)}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="text-xs text-zinc-500 space-y-1">
@@ -205,7 +273,7 @@ export default function MarketCapSwapNode({ data, id }) {
                   : 'Asset data not found')}
             </div>
           )}
-          {toAsset && (
+          {mode === 'swap' && toAsset && (
             <div>
               {isFetchingToData
                 ? 'Fetching comparison market cap...'
@@ -216,18 +284,10 @@ export default function MarketCapSwapNode({ data, id }) {
           )}
         </div>
 
-        {swappedPrice !== null && fromAsset && toAsset && (
+        {swappedPrice !== null && fromAsset && hasTarget && (
           <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded p-2">
             <div className="text-sm text-cyan-700 dark:text-cyan-400">
-              If
-              {' '}
-              <span className="font-semibold">{fromAsset.toUpperCase()}</span>
-              {' '}
-              had
-              {' '}
-              <span className="font-semibold">{toAsset.toUpperCase()}</span>
-              {' '}
-              market cap, its price would be:
+              {resultLabel}
             </div>
             <div className="text-base font-semibold text-cyan-700 dark:text-cyan-400 mt-1">
               ${formatPrice(swappedPrice)}
@@ -235,9 +295,11 @@ export default function MarketCapSwapNode({ data, id }) {
           </div>
         )}
 
-        {swappedPrice === null && fromAsset && toAsset && (
+        {swappedPrice === null && fromAsset && hasTarget && !isFetchingFromData && !isFetchingToData && (
           <div className="text-xs text-amber-600 dark:text-amber-400">
-            Could not compute price. Both assets need valid price and market cap data.
+            {mode === 'swap'
+              ? 'Could not compute price. Both assets need valid price and market cap data.'
+              : 'Could not compute price. Asset needs valid price and market cap data.'}
           </div>
         )}
       </div>

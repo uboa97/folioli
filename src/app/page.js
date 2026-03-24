@@ -2633,7 +2633,7 @@ export default function Home() {
                     className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-2"
                   >
                     <span className="w-3 h-3 rounded bg-rose-600"></span>
-                    Market Cap Swap
+                    Market Cap Tool
                   </button>
                 </div>
               </>
