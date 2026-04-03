@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { getRecentTickers, addRecentTicker } from '@/lib/recentTickers';
 
 export default function TickerSearch({
   value,
@@ -85,10 +86,28 @@ export default function TickerSearch({
     onChange?.(val);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!val.trim()) {
+      setResults([]);
+      setIsOpen(false);
+      showRecentTickers();
+      return;
+    }
+
     debounceRef.current = setTimeout(() => {
       fetchResults(val);
     }, 300);
   };
+
+  const showRecentTickers = useCallback(() => {
+    const recent = getRecentTickers();
+    if (recent.length > 0) {
+      setResults(recent.map(t => ({ symbol: t, name: 'Recent', isRecent: true })));
+      updateDropdownPos();
+      setIsOpen(true);
+      setHighlightIndex(-1);
+    }
+  }, [updateDropdownPos]);
 
   const commitSelection = useCallback((symbol) => {
     // Yahoo crypto comes as "ETH-USD", "BTC-USD" — strip the -USD/-EUR etc. suffix
@@ -98,6 +117,7 @@ export default function TickerSearch({
     onSelect?.(ticker);
     setIsOpen(false);
     setResults([]);
+    addRecentTicker(ticker);
   }, [onChange, onSelect]);
 
   const handleKeyDownInternal = (e) => {
@@ -161,6 +181,9 @@ export default function TickerSearch({
       }}
       className="bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-600 rounded shadow-lg max-h-48 overflow-y-auto"
     >
+      {results[0]?.isRecent && (
+        <div className="px-3 py-1 text-xs text-zinc-400 dark:text-zinc-500 border-b border-zinc-200 dark:border-zinc-700">Recent</div>
+      )}
       {results.map((item, i) => (
         <div
           key={item.symbol}
@@ -175,7 +198,9 @@ export default function TickerSearch({
         >
           <div className="flex items-center gap-2 min-w-0">
             <span className="font-mono font-semibold shrink-0">{item.symbol}</span>
-            <span className="text-zinc-500 dark:text-zinc-400 truncate text-xs">{item.name}</span>
+            {!item.isRecent && (
+              <span className="text-zinc-500 dark:text-zinc-400 truncate text-xs">{item.name}</span>
+            )}
           </div>
           {item.exchange && (
             <span className="text-zinc-400 dark:text-zinc-500 text-xs shrink-0 ml-2">{item.exchange}</span>
@@ -199,6 +224,8 @@ export default function TickerSearch({
           if (results.length > 0) {
             updateDropdownPos();
             setIsOpen(true);
+          } else if (!query.trim()) {
+            showRecentTickers();
           }
         }}
         onBlur={() => setIsFocused(false)}

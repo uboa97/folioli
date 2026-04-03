@@ -5,6 +5,7 @@ import MathInput from './MathInput';
 import TickerSearch from './TickerSearch';
 import { Handle, Position } from '@xyflow/react';
 import { fetchPrice } from '@/lib/fetchPrice';
+import { addRecentTicker } from '@/lib/recentTickers';
 
 function formatPrice(price) {
   if (price >= 1) {
@@ -35,6 +36,7 @@ export default function PortfolioNode({ data, id }) {
     setIsLoading(true);
     setNewTicker('');
     setNewAmount('');
+    addRecentTicker(ticker);
 
     const { price, marketCap, type } = await fetchPrice(ticker);
 
