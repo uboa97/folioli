@@ -22,6 +22,7 @@ import ProjectedPortfolioNode from '@/components/ProjectedPortfolioNode';
 import QuickConvertNode from '@/components/QuickConvertNode';
 import TimeMachineNode from '@/components/TimeMachineNode';
 import MarketCapSwapNode from '@/components/MarketCapSwapNode';
+import QuickSlidersNode from '@/components/QuickSlidersNode';
 import { fetchPrice } from '@/lib/fetchPrice';
 
 const nodeTypes = {
@@ -36,6 +37,7 @@ const nodeTypes = {
   quickConvert: QuickConvertNode,
   timeMachine: TimeMachineNode,
   marketCapSwap: MarketCapSwapNode,
+  quickSliders: QuickSlidersNode,
 };
 
 const INITIAL_PORTFOLIO_ID = 'portfolio-1';
@@ -123,6 +125,8 @@ export default function Home() {
   const [timeMachineCount, setTimeMachineCount] = useState(0);
   const [marketCapSwapInputs, setMarketCapSwapInputs] = useState({});
   const [marketCapSwapCount, setMarketCapSwapCount] = useState(0);
+  const [quickSlidersInputs, setQuickSlidersInputs] = useState({});
+  const [quickSlidersCount, setQuickSlidersCount] = useState(0);
   const [projectedForPortfolio, setProjectedForPortfolio] = useState({});
   const [projectedCount, setProjectedCount] = useState(0);
   const [disabledNodes, setDisabledNodes] = useState({});
@@ -207,6 +211,17 @@ export default function Home() {
         }
         if (inputs.toAsset && inputs.toAsset !== 'USD' && inputs.toAsset !== 'CASH') {
           tickersToFetch.add(inputs.toAsset);
+        }
+      }
+
+      // From quick sliders inputs
+      for (const inputs of Object.values(quickSlidersInputs)) {
+        if (inputs.assets) {
+          for (const asset of inputs.assets) {
+            if (asset.ticker !== 'USD' && asset.ticker !== 'CASH') {
+              tickersToFetch.add(asset.ticker);
+            }
+          }
         }
       }
 
@@ -358,10 +373,38 @@ export default function Home() {
         }
         setMarketCapSwapInputs(refreshedMarketCapSwapInputs);
       }
+
+      // Update quick sliders inputs with cached prices
+      if (Object.keys(quickSlidersInputs).length > 0) {
+        const refreshedQuickSlidersInputs = {};
+        for (const [nodeId, inputs] of Object.entries(quickSlidersInputs)) {
+          if (inputs.assets && inputs.assets.length > 0) {
+            refreshedQuickSlidersInputs[nodeId] = {
+              ...inputs,
+              assets: inputs.assets.map(asset => {
+                const priceData = priceMap[asset.ticker];
+                if (priceData && priceData.price) {
+                  const newBasePrice = priceData.price;
+                  return {
+                    ...asset,
+                    basePrice: newBasePrice,
+                    currentPrice: newBasePrice * asset.multiplier,
+                    type: priceData.type !== 'unknown' ? priceData.type : asset.type,
+                  };
+                }
+                return asset;
+              }),
+            };
+          } else {
+            refreshedQuickSlidersInputs[nodeId] = inputs;
+          }
+        }
+        setQuickSlidersInputs(refreshedQuickSlidersInputs);
+      }
     } finally {
       setIsRefreshingAll(false);
     }
-  }, [portfolioHoldings, rotationInputs, buyInputs, allInInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs]);
+  }, [portfolioHoldings, rotationInputs, buyInputs, allInInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, quickSlidersInputs]);
 
   // Load state from localStorage on mount
   useEffect(() => {
@@ -379,6 +422,7 @@ export default function Home() {
         if (saved.quickConvertCount !== undefined) setQuickConvertCount(saved.quickConvertCount);
         if (saved.timeMachineCount !== undefined) setTimeMachineCount(saved.timeMachineCount);
         if (saved.marketCapSwapCount !== undefined) setMarketCapSwapCount(saved.marketCapSwapCount);
+        if (saved.quickSlidersCount !== undefined) setQuickSlidersCount(saved.quickSlidersCount);
         if (saved.portfolioCount !== undefined) setPortfolioCount(saved.portfolioCount);
         if (saved.projectedForPortfolio) setProjectedForPortfolio(saved.projectedForPortfolio);
         if (saved.projectedCount !== undefined) setProjectedCount(saved.projectedCount);
@@ -406,6 +450,7 @@ export default function Home() {
         if (saved.quickConvertInputs) setQuickConvertInputs(saved.quickConvertInputs);
         if (saved.timeMachineInputs) setTimeMachineInputs(saved.timeMachineInputs);
         if (saved.marketCapSwapInputs) setMarketCapSwapInputs(saved.marketCapSwapInputs);
+        if (saved.quickSlidersInputs) setQuickSlidersInputs(saved.quickSlidersInputs);
         if (saved.disabledNodes) setDisabledNodes(saved.disabledNodes);
 
         setIsHydrated(true);
@@ -478,6 +523,18 @@ export default function Home() {
             }
             if (inputs.toAsset && inputs.toAsset !== 'USD' && inputs.toAsset !== 'CASH') {
               tickersToFetch.add(inputs.toAsset);
+            }
+          }
+        }
+
+        if (saved.quickSlidersInputs) {
+          for (const inputs of Object.values(saved.quickSlidersInputs)) {
+            if (inputs.assets) {
+              for (const asset of inputs.assets) {
+                if (asset.ticker !== 'USD' && asset.ticker !== 'CASH') {
+                  tickersToFetch.add(asset.ticker);
+                }
+              }
             }
           }
         }
@@ -633,6 +690,34 @@ export default function Home() {
             }
             setMarketCapSwapInputs(refreshedMarketCapSwapInputs);
           }
+
+          // Update quick sliders inputs
+          if (saved.quickSlidersInputs && Object.keys(saved.quickSlidersInputs).length > 0) {
+            const refreshedQuickSlidersInputs = {};
+            for (const [nodeId, inputs] of Object.entries(saved.quickSlidersInputs)) {
+              if (inputs.assets && inputs.assets.length > 0) {
+                refreshedQuickSlidersInputs[nodeId] = {
+                  ...inputs,
+                  assets: inputs.assets.map(asset => {
+                    const priceData = priceMap[asset.ticker];
+                    if (priceData && priceData.price) {
+                      const newBasePrice = priceData.price;
+                      return {
+                        ...asset,
+                        basePrice: newBasePrice,
+                        currentPrice: newBasePrice * asset.multiplier,
+                        type: priceData.type !== 'unknown' ? priceData.type : asset.type,
+                      };
+                    }
+                    return asset;
+                  }),
+                };
+              } else {
+                refreshedQuickSlidersInputs[nodeId] = inputs;
+              }
+            }
+            setQuickSlidersInputs(refreshedQuickSlidersInputs);
+          }
         }
       } else {
         setIsHydrated(true);
@@ -739,11 +824,13 @@ export default function Home() {
       timeMachineCount,
       marketCapSwapInputs,
       marketCapSwapCount,
+      quickSlidersInputs,
+      quickSlidersCount,
       projectedForPortfolio,
       projectedCount,
       disabledNodes,
     });
-  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, projectedForPortfolio, projectedCount, disabledNodes]);
+  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, projectedForPortfolio, projectedCount, disabledNodes]);
 
   // Check if a specific portfolio should have a projected node (has any action nodes connected)
   const getActionNodesForPortfolio = useCallback((portfolioId, edgesList) => {
@@ -812,6 +899,11 @@ export default function Home() {
     // Check for deleted market cap swap nodes
     const deletedMarketCapSwapIds = changes
       .filter(change => change.type === 'remove' && change.id.startsWith('marketCapSwap-'))
+      .map(change => change.id);
+
+    // Check for deleted quick sliders nodes
+    const deletedQuickSlidersIds = changes
+      .filter(change => change.type === 'remove' && change.id.startsWith('quickSliders-'))
       .map(change => change.id);
 
     if (deletedPortfolioIds.length > 0) {
@@ -966,6 +1058,17 @@ export default function Home() {
       });
       setEdges(prev => prev.filter(edge =>
         !deletedMarketCapSwapIds.includes(edge.source) && !deletedMarketCapSwapIds.includes(edge.target)
+      ));
+    }
+
+    if (deletedQuickSlidersIds.length > 0) {
+      setQuickSlidersInputs(prev => {
+        const updated = { ...prev };
+        deletedQuickSlidersIds.forEach(id => delete updated[id]);
+        return updated;
+      });
+      setEdges(prev => prev.filter(edge =>
+        !deletedQuickSlidersIds.includes(edge.source) && !deletedQuickSlidersIds.includes(edge.target)
       ));
     }
 
@@ -1493,6 +1596,25 @@ export default function Home() {
     setShowAddMenu(false);
   }, [marketCapSwapCount, setNodes, getViewportCenter]);
 
+  const handleAddQuickSliders = useCallback(() => {
+    const newQuickSlidersId = `quickSliders-${quickSlidersCount + 1}`;
+    setQuickSlidersCount(prev => prev + 1);
+
+    const center = getViewportCenter();
+
+    setNodes(prev => [
+      ...prev,
+      {
+        id: newQuickSlidersId,
+        type: 'quickSliders',
+        position: { x: center.x - 240, y: center.y - 100 },
+        data: {},
+      },
+    ]);
+
+    setShowAddMenu(false);
+  }, [quickSlidersCount, setNodes, getViewportCenter]);
+
   // Duplicate a portfolio node with its holdings
   const handleDuplicatePortfolio = useCallback((sourceNodeId) => {
     const newPortfolioId = `portfolio-${portfolioCount + 1}`;
@@ -1741,6 +1863,22 @@ export default function Home() {
     setNodes(prev => prev.filter(n => n.id !== nodeId));
     setEdges(prev => prev.filter(e => e.source !== nodeId && e.target !== nodeId));
     setMarketCapSwapInputs(prev => {
+      const { [nodeId]: _, ...rest } = prev;
+      return rest;
+    });
+  }, [setNodes, setEdges]);
+
+  const handleQuickSlidersInputChange = useCallback((nodeId, inputs) => {
+    setQuickSlidersInputs(prev => ({
+      ...prev,
+      [nodeId]: inputs,
+    }));
+  }, []);
+
+  const handleRemoveQuickSliders = useCallback((nodeId) => {
+    setNodes(prev => prev.filter(n => n.id !== nodeId));
+    setEdges(prev => prev.filter(e => e.source !== nodeId && e.target !== nodeId));
+    setQuickSlidersInputs(prev => {
       const { [nodeId]: _, ...rest } = prev;
       return rest;
     });
@@ -2469,6 +2607,17 @@ export default function Home() {
           },
         };
       }
+      if (node.type === 'quickSliders') {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            savedInputs: quickSlidersInputs[node.id],
+            onInputChange: handleQuickSlidersInputChange,
+            onRemove: handleRemoveQuickSliders,
+          },
+        };
+      }
       if (node.type === 'projected') {
         // Find which portfolio this projected node belongs to
         const sourcePortfolioId = Object.entries(projectedForPortfolio).find(
@@ -2487,7 +2636,7 @@ export default function Home() {
       }
       return node;
     });
-  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap, disabledNodes, handleToggleNodeDisabled]);
+  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap, quickSlidersInputs, handleQuickSlidersInputChange, handleRemoveQuickSliders, disabledNodes, handleToggleNodeDisabled]);
 
   // Deduplicate edges to prevent React key warnings
   const uniqueEdges = useMemo(() => {
@@ -2539,6 +2688,8 @@ export default function Home() {
     setTimeMachineCount(0);
     setMarketCapSwapInputs({});
     setMarketCapSwapCount(0);
+    setQuickSlidersInputs({});
+    setQuickSlidersCount(0);
     setProjectedForPortfolio({});
     setProjectedCount(0);
     setDisabledNodes({});
@@ -2582,11 +2733,13 @@ export default function Home() {
       timeMachineCount,
       marketCapSwapInputs,
       marketCapSwapCount,
+      quickSlidersInputs,
+      quickSlidersCount,
       projectedForPortfolio,
       projectedCount,
       disabledNodes,
     };
-  }, [nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, projectedForPortfolio, projectedCount, disabledNodes]);
+  }, [nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, projectedForPortfolio, projectedCount, disabledNodes]);
 
   const restoreSnapshot = useCallback((saved) => {
     if (!saved) return;
@@ -2618,6 +2771,8 @@ export default function Home() {
     setTimeMachineCount(saved.timeMachineCount ?? 0);
     setMarketCapSwapInputs(saved.marketCapSwapInputs ?? {});
     setMarketCapSwapCount(saved.marketCapSwapCount ?? 0);
+    setQuickSlidersInputs(saved.quickSlidersInputs ?? {});
+    setQuickSlidersCount(saved.quickSlidersCount ?? 0);
     setProjectedForPortfolio(saved.projectedForPortfolio ?? {});
     setProjectedCount(saved.projectedCount ?? 0);
     setDisabledNodes(saved.disabledNodes ?? {});
@@ -2731,6 +2886,8 @@ export default function Home() {
     setTimeMachineCount(0);
     setMarketCapSwapInputs({});
     setMarketCapSwapCount(0);
+    setQuickSlidersInputs({});
+    setQuickSlidersCount(0);
     setProjectedForPortfolio({});
     setProjectedCount(0);
     setDisabledNodes({});
@@ -2862,6 +3019,13 @@ export default function Home() {
                   >
                     <span className="w-3 h-3 rounded bg-rose-600"></span>
                     Market Cap Tool
+                  </button>
+                  <button
+                    onClick={handleAddQuickSliders}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-2"
+                  >
+                    <span className="w-3 h-3 rounded bg-amber-500"></span>
+                    Quick Sliders
                   </button>
                 </div>
               </>
