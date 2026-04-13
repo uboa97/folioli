@@ -23,6 +23,7 @@ import QuickConvertNode from '@/components/QuickConvertNode';
 import TimeMachineNode from '@/components/TimeMachineNode';
 import MarketCapSwapNode from '@/components/MarketCapSwapNode';
 import QuickSlidersNode from '@/components/QuickSlidersNode';
+import ChartNode from '@/components/ChartNode';
 import { fetchPrice } from '@/lib/fetchPrice';
 
 const nodeTypes = {
@@ -38,6 +39,7 @@ const nodeTypes = {
   timeMachine: TimeMachineNode,
   marketCapSwap: MarketCapSwapNode,
   quickSliders: QuickSlidersNode,
+  chart: ChartNode,
 };
 
 const INITIAL_PORTFOLIO_ID = 'portfolio-1';
@@ -127,6 +129,8 @@ export default function Home() {
   const [marketCapSwapCount, setMarketCapSwapCount] = useState(0);
   const [quickSlidersInputs, setQuickSlidersInputs] = useState({});
   const [quickSlidersCount, setQuickSlidersCount] = useState(0);
+  const [chartInputs, setChartInputs] = useState({});
+  const [chartCount, setChartCount] = useState(0);
   const [projectedForPortfolio, setProjectedForPortfolio] = useState({});
   const [projectedCount, setProjectedCount] = useState(0);
   const [disabledNodes, setDisabledNodes] = useState({});
@@ -423,6 +427,7 @@ export default function Home() {
         if (saved.timeMachineCount !== undefined) setTimeMachineCount(saved.timeMachineCount);
         if (saved.marketCapSwapCount !== undefined) setMarketCapSwapCount(saved.marketCapSwapCount);
         if (saved.quickSlidersCount !== undefined) setQuickSlidersCount(saved.quickSlidersCount);
+        if (saved.chartCount !== undefined) setChartCount(saved.chartCount);
         if (saved.portfolioCount !== undefined) setPortfolioCount(saved.portfolioCount);
         if (saved.projectedForPortfolio) setProjectedForPortfolio(saved.projectedForPortfolio);
         if (saved.projectedCount !== undefined) setProjectedCount(saved.projectedCount);
@@ -451,6 +456,7 @@ export default function Home() {
         if (saved.timeMachineInputs) setTimeMachineInputs(saved.timeMachineInputs);
         if (saved.marketCapSwapInputs) setMarketCapSwapInputs(saved.marketCapSwapInputs);
         if (saved.quickSlidersInputs) setQuickSlidersInputs(saved.quickSlidersInputs);
+        if (saved.chartInputs) setChartInputs(saved.chartInputs);
         if (saved.disabledNodes) setDisabledNodes(saved.disabledNodes);
 
         setIsHydrated(true);
@@ -826,11 +832,13 @@ export default function Home() {
       marketCapSwapCount,
       quickSlidersInputs,
       quickSlidersCount,
+      chartInputs,
+      chartCount,
       projectedForPortfolio,
       projectedCount,
       disabledNodes,
     });
-  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, projectedForPortfolio, projectedCount, disabledNodes]);
+  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, projectedForPortfolio, projectedCount, disabledNodes]);
 
   // Check if a specific portfolio should have a projected node (has any action nodes connected)
   const getActionNodesForPortfolio = useCallback((portfolioId, edgesList) => {
@@ -904,6 +912,11 @@ export default function Home() {
     // Check for deleted quick sliders nodes
     const deletedQuickSlidersIds = changes
       .filter(change => change.type === 'remove' && change.id.startsWith('quickSliders-'))
+      .map(change => change.id);
+
+    // Check for deleted chart nodes
+    const deletedChartIds = changes
+      .filter(change => change.type === 'remove' && change.id.startsWith('chart-'))
       .map(change => change.id);
 
     if (deletedPortfolioIds.length > 0) {
@@ -1069,6 +1082,17 @@ export default function Home() {
       });
       setEdges(prev => prev.filter(edge =>
         !deletedQuickSlidersIds.includes(edge.source) && !deletedQuickSlidersIds.includes(edge.target)
+      ));
+    }
+
+    if (deletedChartIds.length > 0) {
+      setChartInputs(prev => {
+        const updated = { ...prev };
+        deletedChartIds.forEach(id => delete updated[id]);
+        return updated;
+      });
+      setEdges(prev => prev.filter(edge =>
+        !deletedChartIds.includes(edge.source) && !deletedChartIds.includes(edge.target)
       ));
     }
 
@@ -1615,6 +1639,25 @@ export default function Home() {
     setShowAddMenu(false);
   }, [quickSlidersCount, setNodes, getViewportCenter]);
 
+  const handleAddChart = useCallback(() => {
+    const newChartId = `chart-${chartCount + 1}`;
+    setChartCount(prev => prev + 1);
+
+    const center = getViewportCenter();
+
+    setNodes(prev => [
+      ...prev,
+      {
+        id: newChartId,
+        type: 'chart',
+        position: { x: center.x - 170, y: center.y - 120 },
+        data: {},
+      },
+    ]);
+
+    setShowAddMenu(false);
+  }, [chartCount, setNodes, getViewportCenter]);
+
   // Duplicate a portfolio node with its holdings
   const handleDuplicatePortfolio = useCallback((sourceNodeId) => {
     const newPortfolioId = `portfolio-${portfolioCount + 1}`;
@@ -1879,6 +1922,22 @@ export default function Home() {
     setNodes(prev => prev.filter(n => n.id !== nodeId));
     setEdges(prev => prev.filter(e => e.source !== nodeId && e.target !== nodeId));
     setQuickSlidersInputs(prev => {
+      const { [nodeId]: _, ...rest } = prev;
+      return rest;
+    });
+  }, [setNodes, setEdges]);
+
+  const handleChartInputChange = useCallback((nodeId, inputs) => {
+    setChartInputs(prev => ({
+      ...prev,
+      [nodeId]: inputs,
+    }));
+  }, []);
+
+  const handleRemoveChart = useCallback((nodeId) => {
+    setNodes(prev => prev.filter(n => n.id !== nodeId));
+    setEdges(prev => prev.filter(e => e.source !== nodeId && e.target !== nodeId));
+    setChartInputs(prev => {
       const { [nodeId]: _, ...rest } = prev;
       return rest;
     });
@@ -2618,6 +2677,17 @@ export default function Home() {
           },
         };
       }
+      if (node.type === 'chart') {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            savedInputs: chartInputs[node.id],
+            onInputChange: handleChartInputChange,
+            onRemove: handleRemoveChart,
+          },
+        };
+      }
       if (node.type === 'projected') {
         // Find which portfolio this projected node belongs to
         const sourcePortfolioId = Object.entries(projectedForPortfolio).find(
@@ -2636,7 +2706,7 @@ export default function Home() {
       }
       return node;
     });
-  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap, quickSlidersInputs, handleQuickSlidersInputChange, handleRemoveQuickSliders, disabledNodes, handleToggleNodeDisabled]);
+  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap, quickSlidersInputs, handleQuickSlidersInputChange, handleRemoveQuickSliders, chartInputs, handleChartInputChange, handleRemoveChart, disabledNodes, handleToggleNodeDisabled]);
 
   // Deduplicate edges to prevent React key warnings
   const uniqueEdges = useMemo(() => {
@@ -2690,6 +2760,8 @@ export default function Home() {
     setMarketCapSwapCount(0);
     setQuickSlidersInputs({});
     setQuickSlidersCount(0);
+    setChartInputs({});
+    setChartCount(0);
     setProjectedForPortfolio({});
     setProjectedCount(0);
     setDisabledNodes({});
@@ -2735,11 +2807,13 @@ export default function Home() {
       marketCapSwapCount,
       quickSlidersInputs,
       quickSlidersCount,
+      chartInputs,
+      chartCount,
       projectedForPortfolio,
       projectedCount,
       disabledNodes,
     };
-  }, [nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, projectedForPortfolio, projectedCount, disabledNodes]);
+  }, [nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, projectedForPortfolio, projectedCount, disabledNodes]);
 
   const restoreSnapshot = useCallback((saved) => {
     if (!saved) return;
@@ -2773,6 +2847,8 @@ export default function Home() {
     setMarketCapSwapCount(saved.marketCapSwapCount ?? 0);
     setQuickSlidersInputs(saved.quickSlidersInputs ?? {});
     setQuickSlidersCount(saved.quickSlidersCount ?? 0);
+    setChartInputs(saved.chartInputs ?? {});
+    setChartCount(saved.chartCount ?? 0);
     setProjectedForPortfolio(saved.projectedForPortfolio ?? {});
     setProjectedCount(saved.projectedCount ?? 0);
     setDisabledNodes(saved.disabledNodes ?? {});
@@ -2888,6 +2964,8 @@ export default function Home() {
     setMarketCapSwapCount(0);
     setQuickSlidersInputs({});
     setQuickSlidersCount(0);
+    setChartInputs({});
+    setChartCount(0);
     setProjectedForPortfolio({});
     setProjectedCount(0);
     setDisabledNodes({});
@@ -3026,6 +3104,13 @@ export default function Home() {
                   >
                     <span className="w-3 h-3 rounded bg-amber-500"></span>
                     Quick Sliders
+                  </button>
+                  <button
+                    onClick={handleAddChart}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-2"
+                  >
+                    <span className="w-3 h-3 rounded bg-sky-600"></span>
+                    Chart
                   </button>
                 </div>
               </>
