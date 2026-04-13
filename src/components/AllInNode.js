@@ -83,7 +83,8 @@ export default function AllInNode({ data, id }) {
     }
 
     // Skip fetch if the asset matches what's in savedInputs and has a valid price
-    if (savedInputs?.toAsset?.toUpperCase() === assetKey && savedInputs?.toPrice != null) {
+    // But don't skip if the saved price came from a target override — it may no longer apply
+    if (savedInputs?.toAsset?.toUpperCase() === assetKey && savedInputs?.toPrice != null && savedInputs?.toType !== 'target') {
       return;
     }
 

@@ -176,6 +176,19 @@ export default function MarketCapSwapNode({ data, id }) {
     setToType(null);
   };
 
+  const handleSwapAssets = () => {
+    const prevFrom = { asset: fromAsset, price: fromPrice, marketCap: fromMarketCap, type: fromType };
+    const prevTo = { asset: toAsset, price: toPrice, marketCap: toMarketCap, type: toType };
+    setFromAsset(prevTo.asset);
+    setFromPrice(prevTo.price);
+    setFromMarketCap(prevTo.marketCap);
+    setFromType(prevTo.type);
+    setToAsset(prevFrom.asset);
+    setToPrice(prevFrom.price);
+    setToMarketCap(prevFrom.marketCap);
+    setToType(prevFrom.type);
+  };
+
   const parsedCustomMarketCap = parseMarketCapInput(customMarketCapInput);
   const targetMarketCap = mode === 'swap' ? toMarketCap : parsedCustomMarketCap;
 
@@ -218,8 +231,8 @@ export default function MarketCapSwapNode({ data, id }) {
           </button>
         </div>
 
-        <div className={mode === 'swap' ? 'grid grid-cols-2 gap-2' : ''}>
-          <div>
+        <div className={mode === 'swap' ? 'flex items-end gap-2' : ''}>
+          <div className={mode === 'swap' ? 'flex-1' : ''}>
             <label className="block text-xs text-zinc-500 mb-1">Asset</label>
             <TickerSearch
               value={fromAsset}
@@ -229,15 +242,25 @@ export default function MarketCapSwapNode({ data, id }) {
             />
           </div>
           {mode === 'swap' && (
-            <div>
-              <label className="block text-xs text-zinc-500 mb-1">Use Market Cap Of</label>
-              <TickerSearch
-                value={toAsset}
-                onSelect={(val) => handleToAssetChange(val)}
-                className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                placeholder="e.g. ETH"
-              />
-            </div>
+            <>
+              <button
+                onClick={handleSwapAssets}
+                disabled={!fromAsset && !toAsset}
+                className="px-1.5 py-1.5 text-sm text-zinc-500 dark:text-zinc-400 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Swap assets"
+              >
+                ⇄
+              </button>
+              <div className="flex-1">
+                <label className="block text-xs text-zinc-500 mb-1">Use Market Cap Of</label>
+                <TickerSearch
+                  value={toAsset}
+                  onSelect={(val) => handleToAssetChange(val)}
+                  className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                  placeholder="e.g. ETH"
+                />
+              </div>
+            </>
           )}
           {mode === 'custom' && (
             <div className="mt-2">
