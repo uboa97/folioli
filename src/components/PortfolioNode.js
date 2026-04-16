@@ -75,6 +75,21 @@ export default function PortfolioNode({ data, id }) {
     data.onHoldingsChange?.(id, updated);
   }, [holdings, data, id]);
 
+  const updateHoldingCost = useCallback((index, rawCost) => {
+    const trimmed = typeof rawCost === 'string' ? rawCost.trim() : rawCost;
+    const cost = trimmed === '' || trimmed === null || trimmed === undefined
+      ? null
+      : parseFloat(trimmed);
+    if (cost !== null && (!Number.isFinite(cost) || cost < 0)) return;
+
+    const updated = holdings.map((holding, i) => {
+      if (i !== index) return holding;
+      return { ...holding, cost };
+    });
+
+    data.onHoldingsChange?.(id, updated);
+  }, [holdings, data, id]);
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
       addHolding();
@@ -82,6 +97,15 @@ export default function PortfolioNode({ data, id }) {
   };
 
   const totalValue = holdings.reduce((sum, h) => sum + (h.value || 0), 0);
+
+  const allHaveCost = holdings.length > 0 && holdings.every(
+    h => h.cost != null && Number.isFinite(h.cost) && h.cost > 0 && h.price !== null
+  );
+  const totalCost = allHaveCost
+    ? holdings.reduce((sum, h) => sum + h.cost * h.amount, 0)
+    : 0;
+  const returnDollars = allHaveCost ? totalValue - totalCost : 0;
+  const returnPct = allHaveCost && totalCost > 0 ? (returnDollars / totalCost) * 100 : 0;
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[320px]">
@@ -142,6 +166,29 @@ export default function PortfolioNode({ data, id }) {
                     ) : (
                       <div className="text-xs text-red-500">Price N/A</div>
                     )}
+                    {(() => {
+                      const cost = holding.cost;
+                      const hasCost = cost != null && Number.isFinite(cost) && cost > 0;
+                      const pct = hasCost && holding.price !== null
+                        ? ((holding.price - cost) / cost) * 100
+                        : null;
+                      return (
+                        <div className="flex items-center justify-end gap-1 mt-0.5 text-[10px]">
+                          <span className="text-zinc-500">cost</span>
+                          <MathInput
+                            placeholder="—"
+                            value={cost != null ? String(cost) : ''}
+                            onChange={(val) => updateHoldingCost(index, val)}
+                            className="w-14 px-1 py-0 text-right text-zinc-600 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                          {pct !== null && (
+                            <span className={pct >= 0 ? 'text-green-500' : 'text-red-500'}>
+                              {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                   {holding.value !== null && (
                     <div className="font-medium text-green-600 dark:text-green-400 min-w-[80px] text-right">
@@ -189,6 +236,17 @@ export default function PortfolioNode({ data, id }) {
                 );
               })}
             </div>
+            {allHaveCost && (
+              <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-700 flex justify-between items-center text-sm">
+                <span className="text-zinc-500">Return</span>
+                <div className={`font-medium ${returnDollars >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {returnDollars >= 0 ? '+' : '-'}${formatValue(Math.abs(returnDollars))}
+                  <span className="ml-2 text-xs">
+                    ({returnPct >= 0 ? '+' : ''}{returnPct.toFixed(2)}%)
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
