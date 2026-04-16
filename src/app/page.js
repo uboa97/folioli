@@ -24,6 +24,7 @@ import TimeMachineNode from '@/components/TimeMachineNode';
 import MarketCapSwapNode from '@/components/MarketCapSwapNode';
 import QuickSlidersNode from '@/components/QuickSlidersNode';
 import ChartNode from '@/components/ChartNode';
+import TextLabelNode from '@/components/TextLabelNode';
 import { fetchPrice } from '@/lib/fetchPrice';
 
 const nodeTypes = {
@@ -40,6 +41,7 @@ const nodeTypes = {
   marketCapSwap: MarketCapSwapNode,
   quickSliders: QuickSlidersNode,
   chart: ChartNode,
+  textLabel: TextLabelNode,
 };
 
 const INITIAL_PORTFOLIO_ID = 'portfolio-1';
@@ -131,6 +133,8 @@ export default function Home() {
   const [quickSlidersCount, setQuickSlidersCount] = useState(0);
   const [chartInputs, setChartInputs] = useState({});
   const [chartCount, setChartCount] = useState(0);
+  const [textLabels, setTextLabels] = useState({});
+  const [textLabelCount, setTextLabelCount] = useState(0);
   const [projectedForPortfolio, setProjectedForPortfolio] = useState({});
   const [projectedCount, setProjectedCount] = useState(0);
   const [disabledNodes, setDisabledNodes] = useState({});
@@ -428,6 +432,7 @@ export default function Home() {
         if (saved.marketCapSwapCount !== undefined) setMarketCapSwapCount(saved.marketCapSwapCount);
         if (saved.quickSlidersCount !== undefined) setQuickSlidersCount(saved.quickSlidersCount);
         if (saved.chartCount !== undefined) setChartCount(saved.chartCount);
+        if (saved.textLabelCount !== undefined) setTextLabelCount(saved.textLabelCount);
         if (saved.portfolioCount !== undefined) setPortfolioCount(saved.portfolioCount);
         if (saved.projectedForPortfolio) setProjectedForPortfolio(saved.projectedForPortfolio);
         if (saved.projectedCount !== undefined) setProjectedCount(saved.projectedCount);
@@ -457,6 +462,7 @@ export default function Home() {
         if (saved.marketCapSwapInputs) setMarketCapSwapInputs(saved.marketCapSwapInputs);
         if (saved.quickSlidersInputs) setQuickSlidersInputs(saved.quickSlidersInputs);
         if (saved.chartInputs) setChartInputs(saved.chartInputs);
+        if (saved.textLabels) setTextLabels(saved.textLabels);
         if (saved.disabledNodes) setDisabledNodes(saved.disabledNodes);
 
         setIsHydrated(true);
@@ -834,11 +840,13 @@ export default function Home() {
       quickSlidersCount,
       chartInputs,
       chartCount,
+      textLabels,
+      textLabelCount,
       projectedForPortfolio,
       projectedCount,
       disabledNodes,
     });
-  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, projectedForPortfolio, projectedCount, disabledNodes]);
+  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, textLabels, textLabelCount, projectedForPortfolio, projectedCount, disabledNodes]);
 
   // Check if a specific portfolio should have a projected node (has any action nodes connected)
   const getActionNodesForPortfolio = useCallback((portfolioId, edgesList) => {
@@ -917,6 +925,11 @@ export default function Home() {
     // Check for deleted chart nodes
     const deletedChartIds = changes
       .filter(change => change.type === 'remove' && change.id.startsWith('chart-'))
+      .map(change => change.id);
+
+    // Check for deleted text label nodes
+    const deletedTextLabelIds = changes
+      .filter(change => change.type === 'remove' && change.id.startsWith('textLabel-'))
       .map(change => change.id);
 
     if (deletedPortfolioIds.length > 0) {
@@ -1094,6 +1107,14 @@ export default function Home() {
       setEdges(prev => prev.filter(edge =>
         !deletedChartIds.includes(edge.source) && !deletedChartIds.includes(edge.target)
       ));
+    }
+
+    if (deletedTextLabelIds.length > 0) {
+      setTextLabels(prev => {
+        const updated = { ...prev };
+        deletedTextLabelIds.forEach(id => delete updated[id]);
+        return updated;
+      });
     }
 
     // Remove projected nodes for portfolios that no longer have action nodes
@@ -1657,6 +1678,45 @@ export default function Home() {
 
     setShowAddMenu(false);
   }, [chartCount, setNodes, getViewportCenter]);
+
+  const handleAddTextLabel = useCallback(() => {
+    const newTextLabelId = `textLabel-${textLabelCount + 1}`;
+    setTextLabelCount(prev => prev + 1);
+
+    const center = getViewportCenter();
+
+    setNodes(prev => [
+      ...prev,
+      {
+        id: newTextLabelId,
+        type: 'textLabel',
+        position: { x: center.x - 90, y: center.y - 20 },
+        data: {},
+      },
+    ]);
+
+    setShowAddMenu(false);
+  }, [textLabelCount, setNodes, getViewportCenter]);
+
+  const handleTextLabelChange = useCallback((nodeId, text) => {
+    setTextLabels(prev => {
+      const existing = prev[nodeId];
+      const prior = typeof existing === 'string' ? { text: existing } : (existing || {});
+      return { ...prev, [nodeId]: { ...prior, text } };
+    });
+  }, []);
+
+  const handleTextLabelSizeChange = useCallback((nodeId, size) => {
+    setTextLabels(prev => {
+      const existing = prev[nodeId];
+      const prior = typeof existing === 'string' ? { text: existing } : (existing || {});
+      return { ...prev, [nodeId]: { ...prior, size } };
+    });
+  }, []);
+
+  const handleRemoveTextLabel = useCallback((nodeId) => {
+    setNodes(prev => prev.filter(n => n.id !== nodeId));
+  }, [setNodes]);
 
   // Duplicate a portfolio node with its holdings
   const handleDuplicatePortfolio = useCallback((sourceNodeId) => {
@@ -2688,6 +2748,22 @@ export default function Home() {
           },
         };
       }
+      if (node.type === 'textLabel') {
+        const stored = textLabels[node.id];
+        const text = typeof stored === 'string' ? stored : (stored?.text ?? '');
+        const size = typeof stored === 'object' && stored !== null ? (stored.size ?? 'sm') : 'sm';
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            text,
+            size,
+            onChange: handleTextLabelChange,
+            onSizeChange: handleTextLabelSizeChange,
+            onRemove: handleRemoveTextLabel,
+          },
+        };
+      }
       if (node.type === 'projected') {
         // Find which portfolio this projected node belongs to
         const sourcePortfolioId = Object.entries(projectedForPortfolio).find(
@@ -2706,7 +2782,7 @@ export default function Home() {
       }
       return node;
     });
-  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap, quickSlidersInputs, handleQuickSlidersInputChange, handleRemoveQuickSliders, chartInputs, handleChartInputChange, handleRemoveChart, disabledNodes, handleToggleNodeDisabled]);
+  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap, quickSlidersInputs, handleQuickSlidersInputChange, handleRemoveQuickSliders, chartInputs, handleChartInputChange, handleRemoveChart, textLabels, handleTextLabelChange, handleTextLabelSizeChange, handleRemoveTextLabel, disabledNodes, handleToggleNodeDisabled]);
 
   // Deduplicate edges to prevent React key warnings
   const uniqueEdges = useMemo(() => {
@@ -2762,6 +2838,8 @@ export default function Home() {
     setQuickSlidersCount(0);
     setChartInputs({});
     setChartCount(0);
+    setTextLabels({});
+    setTextLabelCount(0);
     setProjectedForPortfolio({});
     setProjectedCount(0);
     setDisabledNodes({});
@@ -2809,11 +2887,13 @@ export default function Home() {
       quickSlidersCount,
       chartInputs,
       chartCount,
+      textLabels,
+      textLabelCount,
       projectedForPortfolio,
       projectedCount,
       disabledNodes,
     };
-  }, [nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, projectedForPortfolio, projectedCount, disabledNodes]);
+  }, [nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, textLabels, textLabelCount, projectedForPortfolio, projectedCount, disabledNodes]);
 
   const restoreSnapshot = useCallback((saved) => {
     if (!saved) return;
@@ -2849,6 +2929,8 @@ export default function Home() {
     setQuickSlidersCount(saved.quickSlidersCount ?? 0);
     setChartInputs(saved.chartInputs ?? {});
     setChartCount(saved.chartCount ?? 0);
+    setTextLabels(saved.textLabels ?? {});
+    setTextLabelCount(saved.textLabelCount ?? 0);
     setProjectedForPortfolio(saved.projectedForPortfolio ?? {});
     setProjectedCount(saved.projectedCount ?? 0);
     setDisabledNodes(saved.disabledNodes ?? {});
@@ -3111,6 +3193,13 @@ export default function Home() {
                   >
                     <span className="w-3 h-3 rounded bg-sky-600"></span>
                     Chart
+                  </button>
+                  <button
+                    onClick={handleAddTextLabel}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 flex items-center gap-2"
+                  >
+                    <span className="w-3 h-3 rounded bg-zinc-400"></span>
+                    Text Label
                   </button>
                 </div>
               </>
