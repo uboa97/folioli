@@ -1,9 +1,19 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
+import { useVariables } from '@/lib/VariablesContext';
 
-function evaluateExpression(expr) {
-  // Only allow digits, decimal points, +, -, *, /, parentheses, and whitespace
-  const sanitized = expr.replace(/\s/g, '');
+function evaluateExpression(expr, variables = {}) {
+  let sanitized = expr.replace(/\s/g, '');
+  let hasUnknown = false;
+  sanitized = sanitized.replace(/[a-zA-Z_][a-zA-Z0-9_]*/g, (name) => {
+    const val = variables[name];
+    if (typeof val === 'number' && isFinite(val)) {
+      return val < 0 ? `(${val})` : String(val);
+    }
+    hasUnknown = true;
+    return name;
+  });
+  if (hasUnknown) return null;
   if (!/^[\d.+\-*/()]+$/.test(sanitized)) return null;
   try {
     // eslint-disable-next-line no-new-func
@@ -15,17 +25,20 @@ function evaluateExpression(expr) {
   }
 }
 
-function hasOperator(value) {
+function needsEvaluation(value) {
   if (!value || typeof value !== 'string') return false;
-  // Check if string contains +, -, *, / that isn't just a leading negative
+  // Any letter (variable reference) means defer evaluation
+  if (/[a-zA-Z_]/.test(value)) return true;
+  // Otherwise check for math operators (excluding leading negative)
   const trimmed = value.replace(/^\s*-/, '');
   return /[+\-*/]/.test(trimmed);
 }
 
 export default function MathInput({ value, onChange, className = '', ...props }) {
+  const variables = useVariables();
   const [localValue, setLocalValue] = useState(value ?? '');
   const inputRef = useRef(null);
-  const showEquals = hasOperator(localValue);
+  const showEquals = needsEvaluation(localValue);
 
   // Sync external value changes
   useEffect(() => {
@@ -35,15 +48,15 @@ export default function MathInput({ value, onChange, className = '', ...props })
   const handleChange = (e) => {
     const val = e.target.value;
     setLocalValue(val);
-    // If no operator, pass through immediately
-    if (!hasOperator(val)) {
+    // If no operator/variable, pass through immediately
+    if (!needsEvaluation(val)) {
       onChange(val);
     }
   };
 
   const evaluate = () => {
-    if (!hasOperator(localValue)) return;
-    const result = evaluateExpression(localValue);
+    if (!needsEvaluation(localValue)) return;
+    const result = evaluateExpression(localValue, variables);
     if (result !== null) {
       const str = String(result);
       setLocalValue(str);
@@ -51,8 +64,23 @@ export default function MathInput({ value, onChange, className = '', ...props })
     }
   };
 
+  const handleBlur = (e) => {
+    if (needsEvaluation(localValue)) {
+      const result = evaluateExpression(localValue, variables);
+      if (result !== null) {
+        const str = String(result);
+        setLocalValue(str);
+        onChange(str);
+      } else {
+        // Revert to last committed value to avoid stale display
+        setLocalValue(value ?? '');
+      }
+    }
+    if (props.onBlur) props.onBlur(e);
+  };
+
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && hasOperator(localValue)) {
+    if (e.key === 'Enter' && needsEvaluation(localValue)) {
       e.preventDefault();
       e.stopPropagation();
       evaluate();
@@ -62,8 +90,8 @@ export default function MathInput({ value, onChange, className = '', ...props })
     if (props.onKeyDown) props.onKeyDown(e);
   };
 
-  // Remove onKeyDown from rest props since we handle it
-  const { onKeyDown: _, ...restProps } = props;
+  // Remove handlers we manage from rest props
+  const { onKeyDown: _, onBlur: __, ...restProps } = props;
 
   return (
     <div className={`flex ${showEquals ? 'relative' : ''}`}>
@@ -74,6 +102,7 @@ export default function MathInput({ value, onChange, className = '', ...props })
         value={localValue}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
         className={`${className} ${showEquals ? 'pr-8' : ''}`}
         {...restProps}
       />

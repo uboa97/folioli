@@ -25,6 +25,8 @@ import MarketCapSwapNode from '@/components/MarketCapSwapNode';
 import QuickSlidersNode from '@/components/QuickSlidersNode';
 import ChartNode from '@/components/ChartNode';
 import TextLabelNode from '@/components/TextLabelNode';
+import VariablesPanel from '@/components/VariablesPanel';
+import { VariablesProvider } from '@/lib/VariablesContext';
 import { fetchPrice } from '@/lib/fetchPrice';
 
 const nodeTypes = {
@@ -135,6 +137,7 @@ export default function Home() {
   const [chartCount, setChartCount] = useState(0);
   const [textLabels, setTextLabels] = useState({});
   const [textLabelCount, setTextLabelCount] = useState(0);
+  const [variables, setVariables] = useState({});
   const [projectedForPortfolio, setProjectedForPortfolio] = useState({});
   const [projectedCount, setProjectedCount] = useState(0);
   const [disabledNodes, setDisabledNodes] = useState({});
@@ -463,6 +466,7 @@ export default function Home() {
         if (saved.quickSlidersInputs) setQuickSlidersInputs(saved.quickSlidersInputs);
         if (saved.chartInputs) setChartInputs(saved.chartInputs);
         if (saved.textLabels) setTextLabels(saved.textLabels);
+        if (saved.variables) setVariables(saved.variables);
         if (saved.disabledNodes) setDisabledNodes(saved.disabledNodes);
 
         setIsHydrated(true);
@@ -842,11 +846,12 @@ export default function Home() {
       chartCount,
       textLabels,
       textLabelCount,
+      variables,
       projectedForPortfolio,
       projectedCount,
       disabledNodes,
     });
-  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, textLabels, textLabelCount, projectedForPortfolio, projectedCount, disabledNodes]);
+  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, textLabels, textLabelCount, variables, projectedForPortfolio, projectedCount, disabledNodes]);
 
   // Check if a specific portfolio should have a projected node (has any action nodes connected)
   const getActionNodesForPortfolio = useCallback((portfolioId, edgesList) => {
@@ -2840,6 +2845,7 @@ export default function Home() {
     setChartCount(0);
     setTextLabels({});
     setTextLabelCount(0);
+    setVariables({});
     setProjectedForPortfolio({});
     setProjectedCount(0);
     setDisabledNodes({});
@@ -2889,11 +2895,12 @@ export default function Home() {
       chartCount,
       textLabels,
       textLabelCount,
+      variables,
       projectedForPortfolio,
       projectedCount,
       disabledNodes,
     };
-  }, [nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, textLabels, textLabelCount, projectedForPortfolio, projectedCount, disabledNodes]);
+  }, [nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, textLabels, textLabelCount, variables, projectedForPortfolio, projectedCount, disabledNodes]);
 
   const restoreSnapshot = useCallback((saved) => {
     if (!saved) return;
@@ -2931,6 +2938,7 @@ export default function Home() {
     setChartCount(saved.chartCount ?? 0);
     setTextLabels(saved.textLabels ?? {});
     setTextLabelCount(saved.textLabelCount ?? 0);
+    setVariables(saved.variables ?? {});
     setProjectedForPortfolio(saved.projectedForPortfolio ?? {});
     setProjectedCount(saved.projectedCount ?? 0);
     setDisabledNodes(saved.disabledNodes ?? {});
@@ -3048,6 +3056,9 @@ export default function Home() {
     setQuickSlidersCount(0);
     setChartInputs({});
     setChartCount(0);
+    setTextLabels({});
+    setTextLabelCount(0);
+    setVariables({});
     setProjectedForPortfolio({});
     setProjectedCount(0);
     setDisabledNodes({});
@@ -3118,6 +3129,7 @@ export default function Home() {
   }
 
   return (
+    <VariablesProvider value={variables}>
     <div className="w-screen h-screen">
       <ReactFlow
         key={layoutVersion}
@@ -3302,6 +3314,7 @@ export default function Home() {
               </>
             )}
           </div>
+          <VariablesPanel variables={variables} onSetVariables={setVariables} />
           <button
             onClick={cycleTheme}
             className="px-3 py-1.5 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 text-zinc-700 dark:text-white text-sm rounded shadow-lg transition-colors"
@@ -3405,5 +3418,6 @@ export default function Home() {
         )}
       </ReactFlow>
     </div>
+    </VariablesProvider>
   );
 }
