@@ -16,7 +16,7 @@ function formatValue(value) {
 }
 
 export default function YieldNode({ data, id }) {
-  const { holdings = [], onYieldChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled } = data;
+  const { holdings = [], onYieldChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled, onShiftNode, canShiftLeft, canShiftRight } = data;
   const onYieldChangeRef = useRef(onYieldChange);
   const onInputChangeRef = useRef(onInputChange);
   onYieldChangeRef.current = onYieldChange;
@@ -98,8 +98,26 @@ export default function YieldNode({ data, id }) {
       />
 
       <div className="bg-purple-500 text-white px-4 py-2 rounded-t-lg font-semibold flex justify-between items-center">
-        <span>Yield</span>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => onShiftNode?.(id, 'left')}
+            disabled={!canShiftLeft}
+            className="text-white/70 hover:text-white hover:bg-purple-600 rounded px-1.5 py-0.5 text-sm disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+            title="Shift left in chain"
+          >
+            ←
+          </button>
+          <span>Yield</span>
+        </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => onShiftNode?.(id, 'right')}
+            disabled={!canShiftRight}
+            className="text-white/70 hover:text-white hover:bg-purple-600 rounded px-1.5 py-0.5 text-sm disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+            title="Shift right in chain"
+          >
+            →
+          </button>
           <button
             onClick={() => onToggleDisabled?.(id)}
             className={`hover:text-white hover:bg-purple-600 rounded px-1.5 py-0.5 text-sm ${isDisabled ? 'text-white' : 'text-white/70'}`}
