@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import TickerSearch from './TickerSearch';
+import MathInput from './MathInput';
 
 const RANGES = [
   { label: '1W', days: 7 },
@@ -74,6 +75,12 @@ export default function ChartNode({ data, id }) {
   const [asset, setAsset] = useState(savedInputs?.asset || '');
   const [denomAsset, setDenomAsset] = useState(savedInputs?.denomAsset || '');
   const [rangeDays, setRangeDays] = useState(savedInputs?.rangeDays ?? 30);
+  const [sinceDate, setSinceDate] = useState(savedInputs?.sinceDate || '');
+  const [portfolio, setPortfolio] = useState(
+    Array.isArray(savedInputs?.portfolio) && savedInputs.portfolio.length > 0
+      ? savedInputs.portfolio
+      : [{ ticker: '', quantity: '' }]
+  );
   const [points, setPoints] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -84,9 +91,32 @@ export default function ChartNode({ data, id }) {
   // Persist inputs
   useEffect(() => {
     if (onInputChange) {
-      onInputChange(id, { mode, asset, denomAsset, rangeDays });
+      onInputChange(id, { mode, asset, denomAsset, rangeDays, sinceDate, portfolio });
     }
-  }, [id, mode, asset, denomAsset, rangeDays, onInputChange]);
+  }, [id, mode, asset, denomAsset, rangeDays, sinceDate, portfolio, onInputChange]);
+
+  // When sinceDate is set, compute days from today back to that date. Otherwise use the preset.
+  const sinceTimestamp = useMemo(() => {
+    if (!sinceDate) return null;
+    const d = new Date(sinceDate);
+    const t = d.getTime();
+    return Number.isFinite(t) ? t : null;
+  }, [sinceDate]);
+
+  const effectiveDays = useMemo(() => {
+    if (sinceTimestamp != null) {
+      const days = Math.ceil((Date.now() - sinceTimestamp) / (24 * 60 * 60 * 1000));
+      return Math.max(1, Math.min(days, 3650));
+    }
+    return rangeDays;
+  }, [sinceTimestamp, rangeDays]);
+
+  // Serialize the portfolio in a stable way for the effect deps.
+  const portfolioKey = useMemo(() => {
+    return portfolio
+      .map(p => `${(p.ticker || '').toUpperCase().trim()}:${p.quantity || ''}`)
+      .join('|');
+  }, [portfolio]);
 
   // Fetch history when inputs change
   useEffect(() => {
@@ -94,37 +124,119 @@ export default function ChartNode({ data, id }) {
     const denom = denomAsset.toUpperCase().trim();
     const requestId = ++requestIdRef.current;
 
-    if (!ticker) {
+    const validPortfolioItems = mode === 'portfolio'
+      ? portfolio
+          .map(p => ({
+            ticker: (p.ticker || '').toUpperCase().trim(),
+            quantity: parseFloat(p.quantity),
+          }))
+          .filter(p => p.ticker && Number.isFinite(p.quantity) && p.quantity > 0)
+      : [];
+
+    if (mode === 'portfolio') {
+      if (validPortfolioItems.length === 0) {
+        setPoints([]);
+        setError(null);
+        setIsLoading(false);
+        return;
+      }
+    } else if (!ticker) {
       setPoints([]);
       setError(null);
       setIsLoading(false);
       return;
-    }
-    if (mode === 'compare' && !denom) {
+    } else if (mode === 'compare' && !denom) {
       setPoints([]);
       setError(null);
       setIsLoading(false);
       return;
     }
 
+    const filterSince = (pts) => {
+      if (sinceTimestamp == null) return pts;
+      return pts.filter(pt => pt.t >= sinceTimestamp);
+    };
+
     const timer = setTimeout(async () => {
       setIsLoading(true);
       setError(null);
       try {
         if (mode === 'single') {
-          const result = await fetchHistory(ticker, rangeDays, requestId, requestIdRef);
+          const result = await fetchHistory(ticker, effectiveDays, requestId, requestIdRef);
           if (!result) return;
           if (result.error) {
             setError(result.error);
             setPoints([]);
           } else {
-            setPoints(result.points);
+            const filtered = filterSince(result.points);
+            if (filtered.length === 0 && sinceTimestamp != null) {
+              setError('No data in selected range');
+              setPoints([]);
+            } else {
+              setPoints(filtered);
+            }
+          }
+        } else if (mode === 'portfolio') {
+          const results = await Promise.all(
+            validPortfolioItems.map(item =>
+              fetchHistory(item.ticker, effectiveDays, requestId, requestIdRef)
+            )
+          );
+          if (results.some(r => r === null)) return;
+
+          for (let i = 0; i < results.length; i++) {
+            if (results[i].error || results[i].points.length === 0) {
+              setError(`No data for ${validPortfolioItems[i].ticker}`);
+              setPoints([]);
+              return;
+            }
+          }
+
+          // Use the series with the fewest points as the base timeline.
+          let baseIdx = 0;
+          for (let i = 1; i < results.length; i++) {
+            if (results[i].points.length < results[baseIdx].points.length) baseIdx = i;
+          }
+          const basePoints = results[baseIdx].points;
+
+          const valuePoints = [];
+          for (const basePt of basePoints) {
+            let total = 0;
+            let ok = true;
+            for (let i = 0; i < results.length; i++) {
+              const qty = validPortfolioItems[i].quantity;
+              if (i === baseIdx) {
+                total += basePt.p * qty;
+              } else {
+                const series = results[i].points;
+                const idx = nearestIndex(series, basePt.t);
+                const otherPt = series[idx];
+                if (!otherPt) { ok = false; break; }
+                total += otherPt.p * qty;
+              }
+            }
+            if (ok && Number.isFinite(total)) {
+              valuePoints.push({ t: basePt.t, p: total });
+            }
+          }
+
+          if (valuePoints.length === 0) {
+            setError('Could not align price data');
+            setPoints([]);
+          } else {
+            const filtered = filterSince(valuePoints);
+            if (filtered.length === 0 && sinceTimestamp != null) {
+              setError('No data in selected range');
+              setPoints([]);
+            } else {
+              setPoints(filtered);
+            }
           }
         } else {
           // Compare mode: fetch both, then divide aligned by timestamp
           const [a, b] = await Promise.all([
-            fetchHistory(ticker, rangeDays, requestId, requestIdRef),
-            fetchHistory(denom, rangeDays, requestId, requestIdRef),
+            fetchHistory(ticker, effectiveDays, requestId, requestIdRef),
+            fetchHistory(denom, effectiveDays, requestId, requestIdRef),
           ]);
           if (!a || !b) return;
           if (a.error || a.points.length === 0) {
@@ -159,7 +271,13 @@ export default function ChartNode({ data, id }) {
             setError('Could not align price data');
             setPoints([]);
           } else {
-            setPoints(ratioPoints);
+            const filtered = filterSince(ratioPoints);
+            if (filtered.length === 0 && sinceTimestamp != null) {
+              setError('No data in selected range');
+              setPoints([]);
+            } else {
+              setPoints(filtered);
+            }
           }
         }
       } catch {
@@ -175,7 +293,7 @@ export default function ChartNode({ data, id }) {
     isInitializedRef.current = true;
 
     return () => clearTimeout(timer);
-  }, [mode, asset, denomAsset, rangeDays]);
+  }, [mode, asset, denomAsset, effectiveDays, sinceTimestamp, portfolioKey]);
 
   const stats = useMemo(() => {
     if (!points || points.length === 0) return null;
@@ -254,6 +372,7 @@ export default function ChartNode({ data, id }) {
     : (points.length ? points[points.length - 1].t : null);
 
   const isCompare = mode === 'compare';
+  const isPortfolio = mode === 'portfolio';
   const tickerUpper = asset.toUpperCase();
   const denomUpper = denomAsset.toUpperCase();
 
@@ -267,6 +386,23 @@ export default function ChartNode({ data, id }) {
     setAsset(denomAsset);
     setDenomAsset(a);
   };
+
+  const updatePortfolioItem = (idx, field, value) => {
+    setPortfolio(prev => prev.map((p, i) => (i === idx ? { ...p, [field]: value } : p)));
+  };
+  const addPortfolioItem = () => {
+    setPortfolio(prev => [...prev, { ticker: '', quantity: '' }]);
+  };
+  const removePortfolioItem = (idx) => {
+    setPortfolio(prev => prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx));
+  };
+
+  const hasPortfolioData = isPortfolio && portfolio.some(
+    p => (p.ticker || '').trim() && parseFloat(p.quantity) > 0
+  );
+  const hasChartData = isPortfolio
+    ? hasPortfolioData
+    : (asset && (!isCompare || denomAsset));
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[340px]">
@@ -295,9 +431,53 @@ export default function ChartNode({ data, id }) {
           >
             Compare
           </button>
+          <button
+            onClick={() => setMode('portfolio')}
+            className={`flex-1 px-2 py-1 text-xs rounded ${mode === 'portfolio' ? 'bg-sky-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'}`}
+          >
+            Portfolio
+          </button>
         </div>
 
-        {isCompare ? (
+        {isPortfolio ? (
+          <div className="space-y-2">
+            {portfolio.map((item, idx) => (
+              <div key={idx} className="flex gap-2 items-center">
+                <div className="flex-1">
+                  <TickerSearch
+                    value={item.ticker}
+                    onSelect={(val) => updatePortfolioItem(idx, 'ticker', val.toUpperCase())}
+                    className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    placeholder="Ticker"
+                  />
+                </div>
+                <div className="w-24">
+                  <MathInput
+                    value={item.quantity}
+                    onChange={(val) => updatePortfolioItem(idx, 'quantity', val)}
+                    step="any"
+                    className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    placeholder="Qty"
+                  />
+                </div>
+                <button
+                  onClick={() => removePortfolioItem(idx)}
+                  disabled={portfolio.length <= 1}
+                  className="px-1.5 py-0.5 text-sm text-zinc-400 hover:text-red-500 disabled:opacity-30 disabled:hover:text-zinc-400 disabled:cursor-not-allowed"
+                  title="Remove asset"
+                >
+                  x
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={addPortfolioItem}
+              className="text-xs px-2 py-1 bg-sky-100 dark:bg-sky-900/30 text-sky-600 dark:text-sky-400 rounded hover:bg-sky-200 dark:hover:bg-sky-900/50"
+            >
+              + Add Asset
+            </button>
+          </div>
+        ) : isCompare ? (
           <div className="flex items-end gap-2">
             <div className="flex-1">
               <label className="block text-xs text-zinc-500 mb-1">Asset</label>
@@ -338,23 +518,59 @@ export default function ChartNode({ data, id }) {
           </div>
         )}
 
-        {(asset && (!isCompare || denomAsset)) && (
+        {hasChartData && (
           <>
             <div className="flex gap-1">
-              {RANGES.map(r => (
+              {RANGES.map(r => {
+                const isActive = !sinceDate && rangeDays === r.days;
+                return (
+                  <button
+                    key={r.label}
+                    onClick={() => {
+                      setRangeDays(r.days);
+                      if (sinceDate) setSinceDate('');
+                    }}
+                    className={`flex-1 px-2 py-1 text-xs rounded ${isActive ? 'bg-sky-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
+                  >
+                    {r.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-zinc-500">Since:</label>
+              <input
+                type="date"
+                value={sinceDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setSinceDate(e.target.value)}
+                className="flex-1 px-2 py-1 text-xs border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+              {sinceDate && (
                 <button
-                  key={r.label}
-                  onClick={() => setRangeDays(r.days)}
-                  className={`flex-1 px-2 py-1 text-xs rounded ${rangeDays === r.days ? 'bg-sky-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
+                  onClick={() => setSinceDate('')}
+                  className="text-xs px-1.5 py-0.5 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                  title="Clear since date"
                 >
-                  {r.label}
+                  clear
                 </button>
-              ))}
+              )}
             </div>
 
             {isCompare && (
               <div className="text-xs text-zinc-500">
                 {tickerUpper} priced in {denomUpper}
+              </div>
+            )}
+
+            {isPortfolio && (
+              <div className="text-xs text-zinc-500">
+                Total value of{' '}
+                {portfolio
+                  .filter(p => (p.ticker || '').trim() && parseFloat(p.quantity) > 0)
+                  .map(p => `${parseFloat(p.quantity)} ${p.ticker.toUpperCase()}`)
+                  .join(' + ')}
               </div>
             )}
 
