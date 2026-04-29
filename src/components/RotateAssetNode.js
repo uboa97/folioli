@@ -30,17 +30,26 @@ export default function RotateAssetNode({ data, id }) {
   const [toAsset, setToAsset] = useState(savedInputs?.toAsset || '');
   const [toPrice, setToPrice] = useState(savedInputs?.toPrice ?? null);
   const [toType, setToType] = useState(savedInputs?.toType ?? null);
+  const [sellFee, setSellFee] = useState(savedInputs?.sellFee || '');
+  const [buyFee, setBuyFee] = useState(savedInputs?.buyFee || '');
   const [isFetchingPrice, setIsFetchingPrice] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const lastSavedPriceRef = useRef(savedInputs?.toPrice);
   const priceRequestIdRef = useRef(0);
 
+  const sellFeeRate = sellFee ? Math.max(0, parseFloat(sellFee) || 0) / 100 : 0;
+  const buyFeeRate = buyFee ? Math.max(0, parseFloat(buyFee) || 0) / 100 : 0;
+
   const selectedHolding = holdings.find(h => h.ticker === fromAsset);
-  const sellValue = selectedHolding && sellAmount
+  const grossSellValue = selectedHolding && sellAmount
     ? parseFloat(sellAmount) * (selectedHolding.price || 0)
     : 0;
+  const sellFeeAmount = grossSellValue * sellFeeRate;
+  const sellValue = grossSellValue - sellFeeAmount;
 
-  const buyAmount = toPrice && sellValue ? sellValue / toPrice : 0;
+  const grossBuyAmount = toPrice && sellValue ? sellValue / toPrice : 0;
+  const buyFeeAmount = grossBuyAmount * buyFeeRate;
+  const buyAmount = grossBuyAmount - buyFeeAmount;
 
   // Mark as initialized after first render
   useEffect(() => {
@@ -116,9 +125,11 @@ export default function RotateAssetNode({ data, id }) {
         toAsset,
         toPrice,
         toType,
+        sellFee,
+        buyFee,
       });
     }
-  }, [isInitialized, id, fromAsset, sellAmount, toAsset, toPrice, toType]);
+  }, [isInitialized, id, fromAsset, sellAmount, toAsset, toPrice, toType, sellFee, buyFee]);
 
   // Notify parent of rotation changes
   useEffect(() => {
@@ -134,11 +145,13 @@ export default function RotateAssetNode({ data, id }) {
         toPrice,
         toType,
         buyAmount,
+        sellFee: sellFeeRate,
+        buyFee: buyFeeRate,
       });
     } else {
       callback(id, null);
     }
-  }, [fromAsset, sellAmount, toAsset, toPrice, toType, sellValue, buyAmount, id]);
+  }, [fromAsset, sellAmount, toAsset, toPrice, toType, sellValue, buyAmount, sellFeeRate, buyFeeRate, id]);
 
   return (
     <div className={`bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[280px] ${isDisabled ? 'opacity-40' : ''}`}>
@@ -233,11 +246,27 @@ export default function RotateAssetNode({ data, id }) {
               className="w-full px-2 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
               placeholder="0"
             />
-            {sellValue > 0 && (
+            {grossSellValue > 0 && (
               <div className="text-xs text-zinc-500 mt-1">
-                Value: ${formatValue(sellValue)}
+                Value: ${formatValue(grossSellValue)}
+                {sellFeeRate > 0 && (
+                  <> − fee ${formatValue(sellFeeAmount)} = ${formatValue(sellValue)}</>
+                )}
               </div>
             )}
+            <div className="mt-2">
+              <label className="block text-xs text-zinc-500 mb-1">Sell Fee % (optional)</label>
+              <div className="relative">
+                <MathInput
+                  value={sellFee}
+                  onChange={(val) => setSellFee(val)}
+                  step="any"
+                  className="w-full pl-2 pr-6 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="0"
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">%</span>
+              </div>
+            </div>
           </div>
         )}
 
@@ -260,13 +289,33 @@ export default function RotateAssetNode({ data, id }) {
           {toAsset && toPrice === null && !isFetchingPrice && (
             <div className="text-xs text-red-500 mt-1">Price not found</div>
           )}
+          {toAsset && toPrice && (
+            <div className="mt-2">
+              <label className="block text-xs text-zinc-500 mb-1">Buy Fee % (optional)</label>
+              <div className="relative">
+                <MathInput
+                  value={buyFee}
+                  onChange={(val) => setBuyFee(val)}
+                  step="any"
+                  className="w-full pl-2 pr-6 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  placeholder="0"
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">%</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {sellValue > 0 && toPrice && buyAmount > 0 && (
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2">
+          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
             <div className="text-sm text-green-700 dark:text-green-400">
               Receive: <span className="font-semibold">{buyAmount.toFixed(6)} {toAsset.toUpperCase()}</span>
             </div>
+            {buyFeeRate > 0 && (
+              <div className="text-xs text-zinc-500">
+                Buy fee: {buyFeeAmount.toFixed(6)} {toAsset.toUpperCase()} ({(buyFeeRate * 100).toFixed(2)}%)
+              </div>
+            )}
           </div>
         )}
 

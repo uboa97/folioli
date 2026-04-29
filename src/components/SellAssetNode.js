@@ -27,6 +27,7 @@ export default function SellAssetNode({ data, id }) {
   const [inputMode, setInputMode] = useState(savedInputs?.inputMode || 'units'); // 'units' or 'usd'
   const [inputValue, setInputValue] = useState(savedInputs?.inputValue || '');
   const [addCash, setAddCash] = useState(savedInputs?.addCash ?? true);
+  const [fee, setFee] = useState(savedInputs?.fee || '');
   const [isInitialized, setIsInitialized] = useState(false);
 
   const selectedHolding = holdings.find(h => h.ticker === fromAsset);
@@ -37,9 +38,13 @@ export default function SellAssetNode({ data, id }) {
     ? (inputValue ? parseFloat(inputValue) : 0)
     : (inputValue && assetPrice ? parseFloat(inputValue) / assetPrice : 0);
 
-  const sellValue = inputMode === 'usd'
+  const grossSellValue = inputMode === 'usd'
     ? (inputValue ? parseFloat(inputValue) : 0)
     : (inputValue && assetPrice ? parseFloat(inputValue) * assetPrice : 0);
+
+  const feeRate = fee ? Math.max(0, parseFloat(fee) || 0) / 100 : 0;
+  const feeAmount = grossSellValue * feeRate;
+  const sellValue = grossSellValue - feeAmount;
 
   // Mark as initialized after first render
   useEffect(() => {
@@ -56,9 +61,10 @@ export default function SellAssetNode({ data, id }) {
         inputMode,
         inputValue,
         addCash,
+        fee,
       });
     }
-  }, [isInitialized, id, fromAsset, inputMode, inputValue, addCash]);
+  }, [isInitialized, id, fromAsset, inputMode, inputValue, addCash, fee]);
 
   // Notify parent of sell changes
   useEffect(() => {
@@ -71,11 +77,12 @@ export default function SellAssetNode({ data, id }) {
         sellAmount,
         sellValue,
         addCash,
+        fee: feeRate,
       });
     } else {
       callback(id, null);
     }
-  }, [fromAsset, inputValue, sellAmount, sellValue, selectedHolding?.price, addCash, id]);
+  }, [fromAsset, inputValue, sellAmount, sellValue, selectedHolding?.price, addCash, feeRate, id]);
 
   return (
     <div className={`bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[280px] ${isDisabled ? 'opacity-40' : ''}`}>
@@ -223,6 +230,20 @@ export default function SellAssetNode({ data, id }) {
               </div>
             </div>
 
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1">Fee % (optional)</label>
+              <div className="relative">
+                <MathInput
+                  value={fee}
+                  onChange={(val) => setFee(val)}
+                  step="any"
+                  className="w-full pl-2 pr-6 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="0"
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">%</span>
+              </div>
+            </div>
+
             {inputValue && parseFloat(inputValue) > 0 && sellValue > 0 && (
               <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded p-2 space-y-1">
                 <div className="text-sm text-green-700 dark:text-green-400">
@@ -232,6 +253,11 @@ export default function SellAssetNode({ data, id }) {
                     <>Sell: <span className="font-semibold">{sellAmount.toFixed(6)} {fromAsset}</span></>
                   )}
                 </div>
+                {feeRate > 0 && (
+                  <div className="text-xs text-zinc-500">
+                    Fee: ${formatValue(feeAmount)} ({(feeRate * 100).toFixed(2)}%)
+                  </div>
+                )}
               </div>
             )}
 
