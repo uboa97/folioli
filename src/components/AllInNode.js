@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import { fetchPrice } from '@/lib/fetchPrice';
 import TickerSearch from './TickerSearch';
+import NodeTypeSelector from './NodeTypeSelector';
 
 function formatPrice(price) {
   if (price >= 1) {
@@ -17,7 +18,7 @@ function formatValue(value) {
 }
 
 export default function AllInNode({ data, id }) {
-  const { holdings = [], priceOverrides = {}, onAllInChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled, onShiftNode, canShiftLeft, canShiftRight } = data;
+  const { holdings = [], priceOverrides = {}, onAllInChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled, onShiftNode, canShiftLeft, canShiftRight, onReplaceNode } = data;
   const onAllInChangeRef = useRef(onAllInChange);
   const onInputChangeRef = useRef(onInputChange);
   onAllInChangeRef.current = onAllInChange;
@@ -148,7 +149,12 @@ export default function AllInNode({ data, id }) {
           >
             ←
           </button>
-          <span>All-In</span>
+          <NodeTypeSelector
+            currentType="allIn"
+            label="All-In"
+            onReplace={(newType) => onReplaceNode?.(id, newType)}
+            hoverBgClass="hover:bg-yellow-600"
+          />
         </div>
         <div className="flex items-center gap-1">
           <button

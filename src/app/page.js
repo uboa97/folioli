@@ -2388,6 +2388,73 @@ export default function Home() {
     return '#888';
   }, []);
 
+  // Replace an existing action node with a fresh node of a different type, in place.
+  const handleReplaceNode = useCallback((oldNodeId, newType) => {
+    const typeConfig = {
+      rotate: { prefix: 'rotate', count: rotationCount, setCount: setRotationCount },
+      sell: { prefix: 'sell', count: sellCount, setCount: setSellCount },
+      buy: { prefix: 'buy', count: buyCount, setCount: setBuyCount },
+      priceTarget: { prefix: 'priceTarget', count: priceTargetCount, setCount: setPriceTargetCount },
+      allIn: { prefix: 'allIn', count: allInCount, setCount: setAllInCount },
+      yield: { prefix: 'yield', count: yieldCount, setCount: setYieldCount },
+    };
+    const config = typeConfig[newType];
+    if (!config) return;
+    if (oldNodeId.startsWith(`${config.prefix}-`)) return;
+
+    const oldNode = nodes.find(n => n.id === oldNodeId);
+    if (!oldNode) return;
+
+    const incomingEdge = edges.find(e => e.target === oldNodeId);
+    const outgoingEdge = edges.find(e => e.source === oldNodeId);
+    if (!incomingEdge || !outgoingEdge) return;
+
+    const newNodeId = `${config.prefix}-${config.count + 1}`;
+    config.setCount(prev => prev + 1);
+
+    setNodes(prev => {
+      const filtered = prev.filter(n => n.id !== oldNodeId);
+      return [...filtered, {
+        id: newNodeId,
+        type: newType,
+        position: oldNode.position,
+        data: { ...(oldNode.data || {}) },
+      }];
+    });
+
+    setEdges(prev => {
+      const filtered = prev.filter(e => e.source !== oldNodeId && e.target !== oldNodeId);
+      filtered.push({
+        id: `edge-${incomingEdge.source}-${newNodeId}`,
+        source: incomingEdge.source,
+        target: newNodeId,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: getEdgeColor(incomingEdge.source) },
+      });
+      filtered.push({
+        id: `edge-${newNodeId}-${outgoingEdge.target}`,
+        source: newNodeId,
+        target: outgoingEdge.target,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: getEdgeColor(newNodeId) },
+      });
+      return filtered;
+    });
+
+    const drop = (setter) => setter(prev => {
+      if (!(oldNodeId in prev)) return prev;
+      const { [oldNodeId]: _, ...rest } = prev;
+      return rest;
+    });
+    if (oldNodeId.startsWith('rotate-')) { drop(setRotations); drop(setRotationInputs); }
+    else if (oldNodeId.startsWith('sell-')) { drop(setSells); drop(setSellInputs); }
+    else if (oldNodeId.startsWith('buy-')) { drop(setBuys); drop(setBuyInputs); }
+    else if (oldNodeId.startsWith('priceTarget-')) { drop(setPriceTargets); drop(setPriceTargetInputs); }
+    else if (oldNodeId.startsWith('allIn-')) { drop(setAllIns); drop(setAllInInputs); }
+    else if (oldNodeId.startsWith('yield-')) { drop(setYields); drop(setYieldInputs); }
+    drop(setDisabledNodes);
+  }, [nodes, edges, rotationCount, sellCount, buyCount, priceTargetCount, allInCount, yieldCount, getEdgeColor, setNodes, setEdges]);
+
   // Swap an action node with its predecessor ('left') or successor ('right') in the chain.
   const handleShiftNode = useCallback((nodeId, direction) => {
     const portfolioId = getSourcePortfolioForAction(nodeId);
@@ -2706,6 +2773,7 @@ export default function Home() {
             onShiftNode: handleShiftNode,
             canShiftLeft: !!chainPositionByNode[node.id]?.canShiftLeft,
             canShiftRight: !!chainPositionByNode[node.id]?.canShiftRight,
+            onReplaceNode: handleReplaceNode,
           },
         };
       }
@@ -2727,6 +2795,7 @@ export default function Home() {
             onShiftNode: handleShiftNode,
             canShiftLeft: !!chainPositionByNode[node.id]?.canShiftLeft,
             canShiftRight: !!chainPositionByNode[node.id]?.canShiftRight,
+            onReplaceNode: handleReplaceNode,
           },
         };
       }
@@ -2750,6 +2819,7 @@ export default function Home() {
             onShiftNode: handleShiftNode,
             canShiftLeft: !!chainPositionByNode[node.id]?.canShiftLeft,
             canShiftRight: !!chainPositionByNode[node.id]?.canShiftRight,
+            onReplaceNode: handleReplaceNode,
           },
         };
       }
@@ -2771,6 +2841,7 @@ export default function Home() {
             onShiftNode: handleShiftNode,
             canShiftLeft: !!chainPositionByNode[node.id]?.canShiftLeft,
             canShiftRight: !!chainPositionByNode[node.id]?.canShiftRight,
+            onReplaceNode: handleReplaceNode,
           },
         };
       }
@@ -2794,6 +2865,7 @@ export default function Home() {
             onShiftNode: handleShiftNode,
             canShiftLeft: !!chainPositionByNode[node.id]?.canShiftLeft,
             canShiftRight: !!chainPositionByNode[node.id]?.canShiftRight,
+            onReplaceNode: handleReplaceNode,
           },
         };
       }
@@ -2815,6 +2887,7 @@ export default function Home() {
             onShiftNode: handleShiftNode,
             canShiftLeft: !!chainPositionByNode[node.id]?.canShiftLeft,
             canShiftRight: !!chainPositionByNode[node.id]?.canShiftRight,
+            onReplaceNode: handleReplaceNode,
           },
         };
       }
@@ -2907,7 +2980,7 @@ export default function Home() {
       }
       return node;
     });
-  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap, quickSlidersInputs, handleQuickSlidersInputChange, handleRemoveQuickSliders, chartInputs, handleChartInputChange, handleRemoveChart, textLabels, handleTextLabelChange, handleTextLabelSizeChange, handleRemoveTextLabel, disabledNodes, handleToggleNodeDisabled, getOrderedChainNodes, handleShiftNode]);
+  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap, quickSlidersInputs, handleQuickSlidersInputChange, handleRemoveQuickSliders, chartInputs, handleChartInputChange, handleRemoveChart, textLabels, handleTextLabelChange, handleTextLabelSizeChange, handleRemoveTextLabel, disabledNodes, handleToggleNodeDisabled, getOrderedChainNodes, handleShiftNode, handleReplaceNode]);
 
   // Deduplicate edges to prevent React key warnings
   const uniqueEdges = useMemo(() => {

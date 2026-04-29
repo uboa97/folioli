@@ -5,6 +5,7 @@ import { Handle, Position } from '@xyflow/react';
 import { fetchPrice } from '@/lib/fetchPrice';
 import MathInput from './MathInput';
 import TickerSearch from './TickerSearch';
+import NodeTypeSelector from './NodeTypeSelector';
 
 function formatPrice(price) {
   if (price >= 1) {
@@ -18,7 +19,7 @@ function formatValue(value) {
 }
 
 export default function BuyAssetNode({ data, id }) {
-  const { holdings = [], priceOverrides = {}, onBuyChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled, onShiftNode, canShiftLeft, canShiftRight } = data;
+  const { holdings = [], priceOverrides = {}, onBuyChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled, onShiftNode, canShiftLeft, canShiftRight, onReplaceNode } = data;
   const onBuyChangeRef = useRef(onBuyChange);
   const onInputChangeRef = useRef(onInputChange);
   onBuyChangeRef.current = onBuyChange;
@@ -160,7 +161,12 @@ export default function BuyAssetNode({ data, id }) {
           >
             ←
           </button>
-          <span>Buy</span>
+          <NodeTypeSelector
+            currentType="buy"
+            label="Buy"
+            onReplace={(newType) => onReplaceNode?.(id, newType)}
+            hoverBgClass="hover:bg-green-600"
+          />
         </div>
         <div className="flex items-center gap-1">
           <button

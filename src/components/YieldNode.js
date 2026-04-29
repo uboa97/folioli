@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import MathInput from './MathInput';
 import { Handle, Position } from '@xyflow/react';
+import NodeTypeSelector from './NodeTypeSelector';
 
 function formatPrice(price) {
   if (price >= 1) {
@@ -16,7 +17,7 @@ function formatValue(value) {
 }
 
 export default function YieldNode({ data, id }) {
-  const { holdings = [], onYieldChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled, onShiftNode, canShiftLeft, canShiftRight } = data;
+  const { holdings = [], onYieldChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled, onShiftNode, canShiftLeft, canShiftRight, onReplaceNode } = data;
   const onYieldChangeRef = useRef(onYieldChange);
   const onInputChangeRef = useRef(onInputChange);
   onYieldChangeRef.current = onYieldChange;
@@ -107,7 +108,12 @@ export default function YieldNode({ data, id }) {
           >
             ←
           </button>
-          <span>Yield</span>
+          <NodeTypeSelector
+            currentType="yield"
+            label="Yield"
+            onReplace={(newType) => onReplaceNode?.(id, newType)}
+            hoverBgClass="hover:bg-purple-600"
+          />
         </div>
         <div className="flex items-center gap-1">
           <button

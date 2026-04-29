@@ -5,6 +5,7 @@ import { Handle, Position } from '@xyflow/react';
 import { fetchPrice } from '@/lib/fetchPrice';
 import MathInput from './MathInput';
 import TickerSearch from './TickerSearch';
+import NodeTypeSelector from './NodeTypeSelector';
 
 function formatPrice(price) {
   if (price >= 1) {
@@ -18,7 +19,7 @@ function formatValue(value) {
 }
 
 export default function RotateAssetNode({ data, id }) {
-  const { holdings = [], priceOverrides = {}, onRotationChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled, onShiftNode, canShiftLeft, canShiftRight } = data;
+  const { holdings = [], priceOverrides = {}, onRotationChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled, onShiftNode, canShiftLeft, canShiftRight, onReplaceNode } = data;
   const onRotationChangeRef = useRef(onRotationChange);
   const onInputChangeRef = useRef(onInputChange);
   onRotationChangeRef.current = onRotationChange;
@@ -157,7 +158,12 @@ export default function RotateAssetNode({ data, id }) {
           >
             ←
           </button>
-          <span>Rotate Asset</span>
+          <NodeTypeSelector
+            currentType="rotate"
+            label="Rotate Asset"
+            onReplace={(newType) => onReplaceNode?.(id, newType)}
+            hoverBgClass="hover:bg-orange-600"
+          />
         </div>
         <div className="flex items-center gap-1">
           <button

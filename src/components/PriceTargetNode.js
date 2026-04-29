@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import MathInput from './MathInput';
 import { Handle, Position } from '@xyflow/react';
+import NodeTypeSelector from './NodeTypeSelector';
 
 function formatPrice(price) {
   if (price >= 1) {
@@ -48,7 +49,7 @@ function formatPercent(current, target) {
 }
 
 export default function PriceTargetNode({ data, id }) {
-  const { holdings = [], onPriceTargetChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled, onShiftNode, canShiftLeft, canShiftRight } = data;
+  const { holdings = [], onPriceTargetChange, onInputChange, onRemove, onAddChainedNode, savedInputs, isDisabled, onToggleDisabled, onShiftNode, canShiftLeft, canShiftRight, onReplaceNode } = data;
   const onPriceTargetChangeRef = useRef(onPriceTargetChange);
   const onInputChangeRef = useRef(onInputChange);
   onPriceTargetChangeRef.current = onPriceTargetChange;
@@ -130,7 +131,12 @@ export default function PriceTargetNode({ data, id }) {
           >
             ←
           </button>
-          <span>Price Target</span>
+          <NodeTypeSelector
+            currentType="priceTarget"
+            label="Price Target"
+            onReplace={(newType) => onReplaceNode?.(id, newType)}
+            hoverBgClass="hover:bg-cyan-600"
+          />
         </div>
         <div className="flex items-center gap-1">
           <button
