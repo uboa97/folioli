@@ -92,6 +92,25 @@ export default function ProjectedPortfolioNode({ data }) {
                           @ ${formatPrice(holding.price)}
                         </div>
                       )}
+                      {(() => {
+                        if (holding.ticker === 'USD') return null;
+                        const cost = holding.cost;
+                        const hasCost = cost != null && Number.isFinite(cost) && cost > 0;
+                        if (!hasCost) return null;
+                        const pct = holding.price !== null
+                          ? ((holding.price - cost) / cost) * 100
+                          : null;
+                        return (
+                          <div className="flex items-center justify-end gap-1 mt-0.5 text-[10px]">
+                            <span className="text-zinc-500">cost ${formatPrice(cost)}</span>
+                            {pct !== null && (
+                              <span className={pct >= 0 ? 'text-green-500' : 'text-red-500'}>
+                                {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                     {holding.value !== null && (
                       <div className={`font-medium min-w-[80px] text-right ${holding.value < 0 ? 'text-red-600 dark:text-red-400' : 'text-purple-600 dark:text-purple-400'}`}>

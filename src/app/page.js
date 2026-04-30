@@ -2736,6 +2736,17 @@ export default function Home() {
 
     let totalCash = 0;
 
+    // Cost-basis helper: weighted-average per-unit cost when adding `addAmount` units
+    // at `addCost` per unit to an existing holding. Returns null if either side's cost
+    // basis is unknown (we can't fabricate the missing piece).
+    const mergeCost = (existingAmount, existingCost, addAmount, addCost) => {
+      if (existingCost == null || !Number.isFinite(existingCost)) return null;
+      if (addCost == null || !Number.isFinite(addCost)) return null;
+      const totalAmount = existingAmount + addAmount;
+      if (totalAmount <= 0) return existingCost;
+      return (existingAmount * existingCost + addAmount * addCost) / totalAmount;
+    };
+
     // Apply transformations in chain order
     for (const chain of chains) {
       for (const actionId of chain) {
@@ -2744,7 +2755,7 @@ export default function Home() {
           const rotation = rotations[actionId];
           if (!rotation) continue;
 
-          const { fromAsset, sellAmount, toAsset, toPrice, toType, buyAmount } = rotation;
+          const { fromAsset, sellAmount, sellValue, toAsset, toPrice, toType, buyAmount } = rotation;
 
           const fromIndex = projected.findIndex(h => h.ticker === fromAsset);
           if (fromIndex !== -1) {
@@ -2755,14 +2766,20 @@ export default function Home() {
             }
           }
 
+          // Cost basis paid for the new toAsset units = cash equivalent of the sell side
+          // (sellValue is post-sellFee). buyAmount already accounts for buy fee.
+          const newPortionCost = (sellValue != null && buyAmount > 0) ? sellValue / buyAmount : null;
           const toIndex = projected.findIndex(h => h.ticker === toAsset);
           if (toIndex !== -1) {
-            projected[toIndex].amount += buyAmount;
-            projected[toIndex].value = projected[toIndex].amount * (projected[toIndex].price || 0);
+            const existing = projected[toIndex];
+            existing.cost = mergeCost(existing.amount, existing.cost, buyAmount, newPortionCost);
+            existing.amount += buyAmount;
+            existing.value = existing.amount * (existing.price || 0);
           } else {
             projected.push({
               ticker: toAsset,
               amount: buyAmount,
+              cost: newPortionCost,
               price: toPrice,
               type: toType,
               value: buyAmount * toPrice,
@@ -2800,14 +2817,18 @@ export default function Home() {
             totalCash -= cashAmount;
           }
 
+          const newPortionCost = (cashAmount != null && buyAmount > 0) ? cashAmount / buyAmount : null;
           const toIndex = projected.findIndex(h => h.ticker === toAsset);
           if (toIndex !== -1) {
-            projected[toIndex].amount += buyAmount;
-            projected[toIndex].value = projected[toIndex].amount * (projected[toIndex].price || 0);
+            const existing = projected[toIndex];
+            existing.cost = mergeCost(existing.amount, existing.cost, buyAmount, newPortionCost);
+            existing.amount += buyAmount;
+            existing.value = existing.amount * (existing.price || 0);
           } else {
             projected.push({
               ticker: toAsset,
               amount: buyAmount,
+              cost: newPortionCost,
               price: toPrice,
               type: toType,
               value: buyAmount * toPrice,
@@ -2821,22 +2842,34 @@ export default function Home() {
 
           const { toAsset, toPrice, toType, allInAmount } = allIn;
 
-          // Calculate total value including any accumulated cash
-          const currentTotalValue = projected.reduce((sum, h) => sum + (h.value || 0), 0) + totalCash;
+          // Existing units of toAsset (if any) stay put with their original cost basis.
+          // Only the value coming from OTHER assets + cash converts to new toAsset units at toPrice.
+          const existing = projected.find(h => h.ticker === toAsset);
+          const existingAmount = existing ? existing.amount : 0;
+          const existingCost = existing ? existing.cost : null;
 
-          // Clear all holdings
+          const liquidationValue = projected.reduce((sum, h) => {
+            if (h.ticker === toAsset) return sum;
+            return sum + (h.value || 0);
+          }, 0) + totalCash;
+
           projected.length = 0;
           totalCash = 0;
 
-          // Add single holding with entire portfolio value
-          if (currentTotalValue > 0 && toPrice) {
-            projected.push({
-              ticker: toAsset,
-              amount: currentTotalValue / toPrice,
-              price: toPrice,
-              type: toType,
-              value: currentTotalValue,
-            });
+          if (toPrice) {
+            const newUnits = liquidationValue > 0 ? liquidationValue / toPrice : 0;
+            const totalAmount = existingAmount + newUnits;
+            if (totalAmount > 0) {
+              const mergedCost = mergeCost(existingAmount, existingCost, newUnits, toPrice);
+              projected.push({
+                ticker: toAsset,
+                amount: totalAmount,
+                cost: mergedCost,
+                price: toPrice,
+                type: toType,
+                value: totalAmount * toPrice,
+              });
+            }
           }
         }
 
@@ -2847,11 +2880,13 @@ export default function Home() {
           const { asset, yieldType, yieldValue, yieldAmount, assetPrice } = yieldData;
 
           if (yieldType === 'staking') {
-            // Add more of the staked asset
+            // Add more of the staked asset; treat new units as having cost basis = price at receipt.
             const assetIndex = projected.findIndex(h => h.ticker === asset);
             if (assetIndex !== -1) {
-              projected[assetIndex].amount += yieldAmount;
-              projected[assetIndex].value = projected[assetIndex].amount * (projected[assetIndex].price || 0);
+              const existing = projected[assetIndex];
+              existing.cost = mergeCost(existing.amount, existing.cost, yieldAmount, assetPrice ?? null);
+              existing.amount += yieldAmount;
+              existing.value = existing.amount * (existing.price || 0);
             }
           } else {
             // Dividend - add cash
@@ -2867,6 +2902,7 @@ export default function Home() {
       if (cashIndex !== -1) {
         projected[cashIndex].amount += totalCash;
         projected[cashIndex].value = projected[cashIndex].amount;
+        projected[cashIndex].cost = 1;
         if (Math.abs(projected[cashIndex].amount) <= 0.000001) {
           projected.splice(cashIndex, 1);
         }
@@ -2874,6 +2910,7 @@ export default function Home() {
         projected.push({
           ticker: 'USD',
           amount: totalCash,
+          cost: 1,
           price: 1,
           type: 'cash',
           value: totalCash,
