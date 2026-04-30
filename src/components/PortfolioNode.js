@@ -122,6 +122,15 @@ export default function PortfolioNode({ data, id }) {
           >
             dup
           </button>
+          {data.hasChain && (
+            <button
+              onClick={() => data.onDuplicateChain?.(id)}
+              className="text-white/70 hover:text-white hover:bg-blue-700 rounded px-1.5 py-0.5 text-xs"
+              title="Duplicate chain (all action nodes connected to this portfolio)"
+            >
+              dup chain
+            </button>
+          )}
           {data.canRemove && (
             <button
               onClick={() => data.onRemove?.(id)}

@@ -1752,6 +1752,179 @@ export default function Home() {
     }));
   }, [portfolioCount, nodes, portfolioHoldings, setNodes]);
 
+  // Duplicate the entire chain — a new portfolio, all intermediate action nodes, and a new projected — as a fully independent copy.
+  const handleDuplicateChain = useCallback((portfolioId) => {
+    const colorForId = (sourceId) => {
+      if (sourceId.startsWith('portfolio-')) return '#3b82f6';
+      if (sourceId.startsWith('rotate-')) return '#f97316';
+      if (sourceId.startsWith('sell-')) return '#ef4444';
+      if (sourceId.startsWith('buy-')) return '#22c55e';
+      if (sourceId.startsWith('priceTarget-')) return '#06b6d4';
+      if (sourceId.startsWith('allIn-')) return '#eab308';
+      if (sourceId.startsWith('yield-')) return '#a855f7';
+      return '#888';
+    };
+
+    const chains = getOrderedChainNodes(portfolioId);
+    const oldProjectedId = projectedForPortfolio[portfolioId];
+    const oldNodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+    const oldPortfolioNode = oldNodeMap[portfolioId];
+    if (!oldPortfolioNode) return;
+
+    // Generate new IDs for the portfolio, every action node, and the projected node.
+    const newPortfolioId = `portfolio-${portfolioCount + 1}`;
+    setPortfolioCount(prev => prev + 1);
+
+    const newProjectedId = oldProjectedId ? `projected-${projectedCount + 1}` : null;
+    if (oldProjectedId) setProjectedCount(prev => prev + 1);
+
+    const allChainNodeIds = chains.flat();
+    const newIdMap = {};
+    let rCount = rotationCount;
+    let sCount = sellCount;
+    let bCount = buyCount;
+    let ptCount = priceTargetCount;
+    let aiCount = allInCount;
+    let yCount = yieldCount;
+
+    for (const oldId of allChainNodeIds) {
+      let newId;
+      if (oldId.startsWith('rotate-')) { rCount++; newId = `rotate-${rCount}`; }
+      else if (oldId.startsWith('sell-')) { sCount++; newId = `sell-${sCount}`; }
+      else if (oldId.startsWith('buy-')) { bCount++; newId = `buy-${bCount}`; }
+      else if (oldId.startsWith('priceTarget-')) { ptCount++; newId = `priceTarget-${ptCount}`; }
+      else if (oldId.startsWith('allIn-')) { aiCount++; newId = `allIn-${aiCount}`; }
+      else if (oldId.startsWith('yield-')) { yCount++; newId = `yield-${yCount}`; }
+      else continue;
+      newIdMap[oldId] = newId;
+    }
+    setRotationCount(rCount);
+    setSellCount(sCount);
+    setBuyCount(bCount);
+    setPriceTargetCount(ptCount);
+    setAllInCount(aiCount);
+    setYieldCount(yCount);
+
+    // Compute Y offset so the duplicated chain sits below the original.
+    const chainNodes = allChainNodeIds.map(id => oldNodeMap[id]).filter(Boolean);
+    const oldProjectedNode = oldProjectedId ? oldNodeMap[oldProjectedId] : null;
+    const ys = [oldPortfolioNode.position.y, ...chainNodes.map(n => n.position.y)];
+    if (oldProjectedNode) ys.push(oldProjectedNode.position.y);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const yOffset = (maxY - minY) + 250;
+
+    // Build new nodes: portfolio, intermediates, projected.
+    const newNodes = [
+      {
+        id: newPortfolioId,
+        type: 'portfolio',
+        position: { x: oldPortfolioNode.position.x, y: oldPortfolioNode.position.y + yOffset },
+        data: {},
+      },
+    ];
+    for (const oldId of allChainNodeIds) {
+      const oldNode = oldNodeMap[oldId];
+      const newId = newIdMap[oldId];
+      if (!oldNode || !newId) continue;
+      newNodes.push({
+        id: newId,
+        type: oldNode.type,
+        position: { x: oldNode.position.x, y: oldNode.position.y + yOffset },
+        data: { sourcePortfolioId: newPortfolioId },
+      });
+    }
+    if (newProjectedId && oldProjectedNode) {
+      newNodes.push({
+        id: newProjectedId,
+        type: 'projected',
+        position: { x: oldProjectedNode.position.x, y: oldProjectedNode.position.y + yOffset },
+        data: { sourcePortfolioId: newPortfolioId },
+      });
+    }
+    setNodes(prev => [...prev, ...newNodes]);
+
+    // Clone holdings to the new portfolio.
+    const sourceHoldings = portfolioHoldings[portfolioId] || [];
+    setPortfolioHoldings(prev => ({
+      ...prev,
+      [newPortfolioId]: sourceHoldings.map(h => ({ ...h })),
+    }));
+
+    // Register new projected mapping.
+    if (newProjectedId) {
+      setProjectedForPortfolio(prev => ({ ...prev, [newPortfolioId]: newProjectedId }));
+    }
+
+    // Clone per-action state under the new IDs.
+    const cloneStateForKeys = (setter) => {
+      setter(prev => {
+        const next = { ...prev };
+        for (const [oldId, newId] of Object.entries(newIdMap)) {
+          if (prev[oldId] !== undefined) {
+            next[newId] = JSON.parse(JSON.stringify(prev[oldId]));
+          }
+        }
+        return next;
+      });
+    };
+    cloneStateForKeys(setRotations);
+    cloneStateForKeys(setRotationInputs);
+    cloneStateForKeys(setSells);
+    cloneStateForKeys(setSellInputs);
+    cloneStateForKeys(setBuys);
+    cloneStateForKeys(setBuyInputs);
+    cloneStateForKeys(setPriceTargets);
+    cloneStateForKeys(setPriceTargetInputs);
+    cloneStateForKeys(setAllIns);
+    cloneStateForKeys(setAllInInputs);
+    cloneStateForKeys(setYields);
+    cloneStateForKeys(setYieldInputs);
+    cloneStateForKeys(setDisabledNodes);
+
+    // Build edges: newPortfolio → newAction1 → … → newActionN → newProjected (per chain).
+    const newEdges = [];
+    for (const chain of chains) {
+      if (chain.length === 0) continue;
+
+      const firstNewId = newIdMap[chain[0]];
+      if (!firstNewId) continue;
+
+      newEdges.push({
+        id: `edge-${newPortfolioId}-${firstNewId}`,
+        source: newPortfolioId,
+        target: firstNewId,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: '#3b82f6' },
+      });
+
+      for (let i = 0; i < chain.length - 1; i++) {
+        const aId = newIdMap[chain[i]];
+        const bId = newIdMap[chain[i + 1]];
+        if (!aId || !bId) continue;
+        newEdges.push({
+          id: `edge-${aId}-${bId}`,
+          source: aId,
+          target: bId,
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: { stroke: colorForId(aId) },
+        });
+      }
+
+      const lastNewId = newIdMap[chain[chain.length - 1]];
+      if (lastNewId && newProjectedId) {
+        newEdges.push({
+          id: `edge-${lastNewId}-${newProjectedId}`,
+          source: lastNewId,
+          target: newProjectedId,
+          markerEnd: { type: MarkerType.ArrowClosed },
+          style: { stroke: colorForId(lastNewId) },
+        });
+      }
+    }
+    setEdges(prev => [...prev, ...newEdges]);
+  }, [nodes, portfolioHoldings, getOrderedChainNodes, projectedForPortfolio, portfolioCount, projectedCount, rotationCount, sellCount, buyCount, priceTargetCount, allInCount, yieldCount, setNodes, setEdges]);
+
   // Remove a portfolio node and all its connected nodes
   const handleRemovePortfolio = useCallback((portfolioId) => {
     // Find ALL action nodes in the chain (not just directly connected)
@@ -2734,6 +2907,7 @@ export default function Home() {
       if (node.type === 'portfolio') {
         // Count portfolio nodes - only allow removing if there's more than one
         const portfolioNodeCount = nodes.filter(n => n.type === 'portfolio').length;
+        const hasChain = (getOrderedChainNodes(node.id) || []).some(c => c.length > 0);
         return {
           ...node,
           data: {
@@ -2747,6 +2921,8 @@ export default function Home() {
             onAddAllIn: handleAddAllIn,
             onAddYield: handleAddYield,
             onDuplicate: handleDuplicatePortfolio,
+            onDuplicateChain: handleDuplicateChain,
+            hasChain,
             onRemove: handleRemovePortfolio,
             canRemove: portfolioNodeCount > 1,
           },
@@ -2980,7 +3156,7 @@ export default function Home() {
       }
       return node;
     });
-  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap, quickSlidersInputs, handleQuickSlidersInputChange, handleRemoveQuickSliders, chartInputs, handleChartInputChange, handleRemoveChart, textLabels, handleTextLabelChange, handleTextLabelSizeChange, handleRemoveTextLabel, disabledNodes, handleToggleNodeDisabled, getOrderedChainNodes, handleShiftNode, handleReplaceNode]);
+  }, [nodes, edges, portfolioHoldings, projectedForPortfolio, rotations, sells, buys, priceTargets, allIns, yields, rotationInputs, sellInputs, buyInputs, priceTargetInputs, allInInputs, yieldInputs, quickConvertInputs, timeMachineInputs, marketCapSwapInputs, calculateProjectedHoldings, getSourcePortfolioForAction, computeHoldingsUpTo, getPriceOverridesUpTo, handleHoldingsChange, handleAddRotation, handleAddSell, handleAddBuy, handleAddPriceTarget, handleAddAllIn, handleAddYield, handleDuplicatePortfolio, handleDuplicateChain, handleRemovePortfolio, handleRotationChange, handleRotationInputChange, handleRemoveRotation, handleSellChange, handleSellInputChange, handleRemoveSell, handleBuyChange, handleBuyInputChange, handleRemoveBuy, handlePriceTargetChange, handlePriceTargetInputChange, handleRemovePriceTarget, handleAllInChange, handleAllInInputChange, handleRemoveAllIn, handleYieldChange, handleYieldInputChange, handleRemoveYield, handleAddChainedNode, handleQuickConvertInputChange, handleRemoveQuickConvert, handleTimeMachineInputChange, handleRemoveTimeMachine, handleMarketCapSwapInputChange, handleRemoveMarketCapSwap, quickSlidersInputs, handleQuickSlidersInputChange, handleRemoveQuickSliders, chartInputs, handleChartInputChange, handleRemoveChart, textLabels, handleTextLabelChange, handleTextLabelSizeChange, handleRemoveTextLabel, disabledNodes, handleToggleNodeDisabled, getOrderedChainNodes, handleShiftNode, handleReplaceNode]);
 
   // Deduplicate edges to prevent React key warnings
   const uniqueEdges = useMemo(() => {

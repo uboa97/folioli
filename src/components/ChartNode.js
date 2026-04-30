@@ -203,20 +203,26 @@ export default function ChartNode({ data, id }) {
           for (const basePt of basePoints) {
             let total = 0;
             let ok = true;
+            const itemValues = [];
             for (let i = 0; i < results.length; i++) {
               const qty = validPortfolioItems[i].quantity;
+              const ticker = validPortfolioItems[i].ticker;
+              let price;
               if (i === baseIdx) {
-                total += basePt.p * qty;
+                price = basePt.p;
               } else {
                 const series = results[i].points;
                 const idx = nearestIndex(series, basePt.t);
                 const otherPt = series[idx];
                 if (!otherPt) { ok = false; break; }
-                total += otherPt.p * qty;
+                price = otherPt.p;
               }
+              const value = price * qty;
+              total += value;
+              itemValues.push({ ticker, quantity: qty, price, value });
             }
             if (ok && Number.isFinite(total)) {
-              valuePoints.push({ t: basePt.t, p: total });
+              valuePoints.push({ t: basePt.t, p: total, items: itemValues });
             }
           }
 
@@ -364,12 +370,13 @@ export default function ChartNode({ data, id }) {
   const lineColor = isUp ? '#10b981' : '#ef4444';
   const lineColorDim = isUp ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)';
 
-  const displayPrice = hoverIdx !== null && points[hoverIdx]
-    ? points[hoverIdx].p
-    : stats?.last;
-  const displayDate = hoverIdx !== null && points[hoverIdx]
-    ? points[hoverIdx].t
-    : (points.length ? points[points.length - 1].t : null);
+  const displayPoint = hoverIdx !== null && points[hoverIdx]
+    ? points[hoverIdx]
+    : (points.length ? points[points.length - 1] : null);
+  const displayPrice = displayPoint ? displayPoint.p : stats?.last;
+  const displayDate = displayPoint ? displayPoint.t : null;
+  const breakdownItems = displayPoint?.items || null;
+  const breakdownTotal = displayPoint?.p || 0;
 
   const isCompare = mode === 'compare';
   const isPortfolio = mode === 'portfolio';
@@ -648,6 +655,28 @@ export default function ChartNode({ data, id }) {
               <div className="flex justify-between text-xs text-zinc-500">
                 <span>Low: <span className="text-zinc-700 dark:text-zinc-300">{isCompare ? formatRatio(stats.min) : `$${formatPrice(stats.min)}`}</span></span>
                 <span>High: <span className="text-zinc-700 dark:text-zinc-300">{isCompare ? formatRatio(stats.max) : `$${formatPrice(stats.max)}`}</span></span>
+              </div>
+            )}
+
+            {isPortfolio && breakdownItems && breakdownItems.length > 0 && (
+              <div className="border-t border-zinc-200 dark:border-zinc-700 pt-2 space-y-1">
+                {breakdownItems.map((item) => {
+                  const pct = breakdownTotal > 0 ? (item.value / breakdownTotal) * 100 : 0;
+                  return (
+                    <div key={item.ticker} className="flex justify-between items-baseline text-xs">
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-zinc-700 dark:text-zinc-200 font-medium">{item.ticker}</span>
+                        <span className="text-zinc-400">
+                          {item.quantity} @ ${formatPrice(item.price)}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-zinc-700 dark:text-zinc-200">${formatPrice(item.value)}</span>
+                        <span className="text-zinc-400 w-10 text-right">{pct.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </>
