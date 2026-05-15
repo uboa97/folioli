@@ -240,6 +240,7 @@ export default function QuickSlidersNode({ data, id }) {
                     <div className="flex items-center gap-1">
                       <span className="text-zinc-500">Qty:</span>
                       <MathInput
+                        expressionId={`${id}-amount-${asset.ticker || `row${index}`}`}
                         value={String(asset.amount)}
                         onChange={(val) => updateAmount(index, val)}
                         className="w-20 px-1 py-0.5 text-right text-xs border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
@@ -262,6 +263,7 @@ export default function QuickSlidersNode({ data, id }) {
                     <div className="flex items-center gap-1">
                       <span className="text-zinc-500">Price: $</span>
                       <MathInput
+                        expressionId={`${id}-price-${asset.ticker || `row${index}`}`}
                         value={asset.currentPrice !== null ? String(Number(asset.currentPrice.toPrecision(8))) : ''}
                         onChange={(val) => updatePriceManual(index, val)}
                         className="w-24 px-1 py-0.5 text-right text-xs border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
@@ -363,6 +365,7 @@ export default function QuickSlidersNode({ data, id }) {
             className="w-full px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
           />
           <MathInput
+            expressionId={`${id}-newAmount`}
             placeholder="Amount"
             value={newAmount}
             onChange={(val) => setNewAmount(val)}

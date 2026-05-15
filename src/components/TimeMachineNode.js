@@ -284,6 +284,7 @@ export default function TimeMachineNode({ data, id }) {
         <div>
           <label className="block text-xs text-zinc-500 mb-1">Shares / Tokens (optional)</label>
           <MathInput
+            expressionId={`${id}-quantity`}
             value={quantity}
             onChange={(val) => setQuantity(val)}
             step="any"

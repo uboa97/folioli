@@ -460,6 +460,7 @@ export default function ChartNode({ data, id }) {
                 </div>
                 <div className="w-24">
                   <MathInput
+                    expressionId={`${id}-portfolioQty-${item.ticker || `row${idx}`}`}
                     value={item.quantity}
                     onChange={(val) => updatePortfolioItem(idx, 'quantity', val)}
                     step="any"

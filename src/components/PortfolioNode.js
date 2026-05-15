@@ -162,6 +162,7 @@ export default function PortfolioNode({ data, id }) {
                 <div className="flex items-center gap-3">
                   <div className="text-right">
                     <MathInput
+                      expressionId={`${id}-amount-${holding.ticker}`}
                       min="0"
                       step="any"
                       value={String(holding.amount)}
@@ -185,6 +186,7 @@ export default function PortfolioNode({ data, id }) {
                         <div className="flex items-center justify-end gap-1 mt-0.5 text-[10px]">
                           <span className="text-zinc-500">cost</span>
                           <MathInput
+                            expressionId={`${id}-cost-${holding.ticker}`}
                             placeholder="—"
                             value={cost != null ? String(cost) : ''}
                             onChange={(val) => updateHoldingCost(index, val)}
@@ -270,6 +272,7 @@ export default function PortfolioNode({ data, id }) {
             className="w-full px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           />
           <MathInput
+            expressionId={`${id}-newAmount`}
             placeholder="Amount"
             value={newAmount}
             onChange={(val) => setNewAmount(val)}

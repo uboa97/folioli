@@ -193,6 +193,7 @@ export default function YieldNode({ data, id }) {
               <label className="block text-xs text-zinc-500 mb-1">Annual Yield %</label>
               <div className="relative">
                 <MathInput
+                  expressionId={`${id}-yieldPercent`}
                   value={yieldPercent}
                   onChange={(val) => setYieldPercent(val)}
                   step="any"
@@ -207,6 +208,7 @@ export default function YieldNode({ data, id }) {
               <label className="block text-xs text-zinc-500 mb-1">Time Period</label>
               <div className="flex gap-2">
                 <MathInput
+                  expressionId={`${id}-timeAmount`}
                   value={timeAmount}
                   onChange={(val) => setTimeAmount(val)}
                   step="any"

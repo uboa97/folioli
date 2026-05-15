@@ -26,7 +26,7 @@ import QuickSlidersNode from '@/components/QuickSlidersNode';
 import ChartNode from '@/components/ChartNode';
 import TextLabelNode from '@/components/TextLabelNode';
 import VariablesPanel from '@/components/VariablesPanel';
-import { VariablesProvider } from '@/lib/VariablesContext';
+import { VariablesProvider, ExpressionsProvider } from '@/lib/VariablesContext';
 import { fetchPrice } from '@/lib/fetchPrice';
 
 const nodeTypes = {
@@ -138,6 +138,7 @@ export default function Home() {
   const [textLabels, setTextLabels] = useState({});
   const [textLabelCount, setTextLabelCount] = useState(0);
   const [variables, setVariables] = useState({});
+  const [expressions, setExpressions] = useState({});
   const [projectedForPortfolio, setProjectedForPortfolio] = useState({});
   const [projectedCount, setProjectedCount] = useState(0);
   const [disabledNodes, setDisabledNodes] = useState({});
@@ -157,6 +158,25 @@ export default function Home() {
   const [layoutVersion, setLayoutVersion] = useState(0);
 
   const isInitialMount = useRef(true);
+
+  const setExpression = useCallback((id, raw) => {
+    setExpressions(prev => {
+      if (prev[id] === raw) return prev;
+      return { ...prev, [id]: raw };
+    });
+  }, []);
+  const clearExpression = useCallback((id) => {
+    setExpressions(prev => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+  const expressionsContextValue = useMemo(
+    () => ({ expressions, setExpression, clearExpression }),
+    [expressions, setExpression, clearExpression]
+  );
 
   // Global refresh all prices across the app (optimized to fetch each ticker only once)
   const handleRefreshAll = useCallback(async () => {
@@ -467,6 +487,7 @@ export default function Home() {
         if (saved.chartInputs) setChartInputs(saved.chartInputs);
         if (saved.textLabels) setTextLabels(saved.textLabels);
         if (saved.variables) setVariables(saved.variables);
+        if (saved.expressions) setExpressions(saved.expressions);
         if (saved.disabledNodes) setDisabledNodes(saved.disabledNodes);
 
         setIsHydrated(true);
@@ -847,11 +868,12 @@ export default function Home() {
       textLabels,
       textLabelCount,
       variables,
+      expressions,
       projectedForPortfolio,
       projectedCount,
       disabledNodes,
     });
-  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, textLabels, textLabelCount, variables, projectedForPortfolio, projectedCount, disabledNodes]);
+  }, [isHydrated, nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, textLabels, textLabelCount, variables, expressions, projectedForPortfolio, projectedCount, disabledNodes]);
 
   // Check if a specific portfolio should have a projected node (has any action nodes connected)
   const getActionNodesForPortfolio = useCallback((portfolioId, edgesList) => {
@@ -1119,6 +1141,26 @@ export default function Home() {
         const updated = { ...prev };
         deletedTextLabelIds.forEach(id => delete updated[id]);
         return updated;
+      });
+    }
+
+    // Clean up expression bindings owned by any removed node
+    const removedNodeIds = changes
+      .filter(change => change.type === 'remove')
+      .map(change => change.id);
+    if (removedNodeIds.length > 0) {
+      setExpressions(prev => {
+        let changed = false;
+        const next = {};
+        for (const [key, value] of Object.entries(prev)) {
+          const owner = removedNodeIds.find(nid => key === nid || key.startsWith(`${nid}-`));
+          if (owner) {
+            changed = true;
+            continue;
+          }
+          next[key] = value;
+        }
+        return changed ? next : prev;
       });
     }
 
@@ -3252,6 +3294,7 @@ export default function Home() {
     setTextLabels({});
     setTextLabelCount(0);
     setVariables({});
+    setExpressions({});
     setProjectedForPortfolio({});
     setProjectedCount(0);
     setDisabledNodes({});
@@ -3302,11 +3345,12 @@ export default function Home() {
       textLabels,
       textLabelCount,
       variables,
+      expressions,
       projectedForPortfolio,
       projectedCount,
       disabledNodes,
     };
-  }, [nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, textLabels, textLabelCount, variables, projectedForPortfolio, projectedCount, disabledNodes]);
+  }, [nodes, edges, portfolioHoldings, portfolioCount, rotations, rotationInputs, rotationCount, sells, sellInputs, sellCount, buys, buyInputs, buyCount, priceTargets, priceTargetInputs, priceTargetCount, allIns, allInInputs, allInCount, yields, yieldInputs, yieldCount, quickConvertInputs, quickConvertCount, timeMachineInputs, timeMachineCount, marketCapSwapInputs, marketCapSwapCount, quickSlidersInputs, quickSlidersCount, chartInputs, chartCount, textLabels, textLabelCount, variables, expressions, projectedForPortfolio, projectedCount, disabledNodes]);
 
   const restoreSnapshot = useCallback((saved) => {
     if (!saved) return;
@@ -3345,6 +3389,7 @@ export default function Home() {
     setTextLabels(saved.textLabels ?? {});
     setTextLabelCount(saved.textLabelCount ?? 0);
     setVariables(saved.variables ?? {});
+    setExpressions(saved.expressions ?? {});
     setProjectedForPortfolio(saved.projectedForPortfolio ?? {});
     setProjectedCount(saved.projectedCount ?? 0);
     setDisabledNodes(saved.disabledNodes ?? {});
@@ -3465,6 +3510,7 @@ export default function Home() {
     setTextLabels({});
     setTextLabelCount(0);
     setVariables({});
+    setExpressions({});
     setProjectedForPortfolio({});
     setProjectedCount(0);
     setDisabledNodes({});
@@ -3536,6 +3582,7 @@ export default function Home() {
 
   return (
     <VariablesProvider value={variables}>
+    <ExpressionsProvider value={expressionsContextValue}>
     <div className="w-screen h-screen">
       <ReactFlow
         key={layoutVersion}
@@ -3549,6 +3596,9 @@ export default function Home() {
         colorMode={isDark ? 'dark' : 'light'}
         fitView
         fitViewOptions={{ padding: 0.3 }}
+        panOnDrag={[1]}
+        selectionOnDrag
+        selectionMode="partial"
         defaultEdgeOptions={{
           type: 'smoothstep',
         }}
@@ -3824,6 +3874,7 @@ export default function Home() {
         )}
       </ReactFlow>
     </div>
+    </ExpressionsProvider>
     </VariablesProvider>
   );
 }

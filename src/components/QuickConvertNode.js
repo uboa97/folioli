@@ -37,6 +37,25 @@ export default function QuickConvertNode({ data, id }) {
   const [isFetchingToPrice, setIsFetchingToPrice] = useState(false);
   const fromPriceRequestIdRef = useRef(0);
   const toPriceRequestIdRef = useRef(0);
+  const lastSavedFromPriceRef = useRef(savedInputs?.fromPrice);
+  const lastSavedToPriceRef = useRef(savedInputs?.toPrice);
+
+  // Sync prices from savedInputs when they change externally (e.g., global refresh on page load)
+  useEffect(() => {
+    if (savedInputs?.fromPrice !== undefined && savedInputs.fromPrice !== lastSavedFromPriceRef.current) {
+      lastSavedFromPriceRef.current = savedInputs.fromPrice;
+      setFromPrice(savedInputs.fromPrice);
+      if (savedInputs.fromType) setFromType(savedInputs.fromType);
+    }
+  }, [savedInputs?.fromPrice, savedInputs?.fromType]);
+
+  useEffect(() => {
+    if (savedInputs?.toPrice !== undefined && savedInputs.toPrice !== lastSavedToPriceRef.current) {
+      lastSavedToPriceRef.current = savedInputs.toPrice;
+      setToPrice(savedInputs.toPrice);
+      if (savedInputs.toType) setToType(savedInputs.toType);
+    }
+  }, [savedInputs?.toPrice, savedInputs?.toType]);
 
   useEffect(() => {
     const requestId = ++fromPriceRequestIdRef.current;
@@ -121,6 +140,27 @@ export default function QuickConvertNode({ data, id }) {
     setFromType(null);
   };
 
+  const handleSwap = () => {
+    fromPriceRequestIdRef.current++;
+    toPriceRequestIdRef.current++;
+    setIsFetchingFromPrice(false);
+    setIsFetchingToPrice(false);
+
+    const prevFromAsset = fromAsset;
+    const prevFromPrice = fromPrice;
+    const prevFromType = fromType;
+    const prevToAsset = toAsset;
+    const prevToPrice = toPrice;
+    const prevToType = toType;
+
+    setFromAsset(prevToAsset);
+    setFromPrice(prevToPrice);
+    setFromType(prevToType);
+    setToAsset(prevFromAsset);
+    setToPrice(prevFromPrice);
+    setToType(prevFromType);
+  };
+
   const handleToAssetChange = (value) => {
     const nextValue = value.toUpperCase();
     if (nextValue === toAsset) return;
@@ -145,13 +185,23 @@ export default function QuickConvertNode({ data, id }) {
     <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-lg min-w-[300px]">
       <div className="bg-indigo-500 text-white px-4 py-2 rounded-t-lg font-semibold flex justify-between items-center">
         <span>Quick Convert</span>
-        <button
-          onClick={() => onRemove?.(id)}
-          className="text-white/70 hover:text-white hover:bg-indigo-600 rounded px-1.5 py-0.5 text-sm"
-          title="Remove quick convert"
-        >
-          x
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleSwap}
+            disabled={!fromAsset && !toAsset}
+            className="text-white/70 hover:text-white hover:bg-indigo-600 rounded px-1.5 py-0.5 text-sm disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+            title="Swap from/to assets"
+          >
+            ⇄
+          </button>
+          <button
+            onClick={() => onRemove?.(id)}
+            className="text-white/70 hover:text-white hover:bg-indigo-600 rounded px-1.5 py-0.5 text-sm"
+            title="Remove quick convert"
+          >
+            x
+          </button>
+        </div>
       </div>
 
       <div className="p-4 space-y-3">
@@ -179,6 +229,7 @@ export default function QuickConvertNode({ data, id }) {
         <div>
           <label className="block text-xs text-zinc-500 mb-1">Amount ({fromAsset || 'From Asset'})</label>
           <MathInput
+            expressionId={`${id}-fromAmount`}
             value={fromAmount}
             onChange={(val) => setFromAmount(val)}
             step="any"

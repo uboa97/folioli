@@ -220,6 +220,7 @@ export default function SellAssetNode({ data, id }) {
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
                 )}
                 <MathInput
+                  expressionId={`${id}-inputValue`}
                   value={inputValue}
                   onChange={(val) => setInputValue(val)}
                   max={inputMode === 'units' ? selectedHolding.amount : selectedHolding.amount * assetPrice}
@@ -234,6 +235,7 @@ export default function SellAssetNode({ data, id }) {
               <label className="block text-xs text-zinc-500 mb-1">Fee % (optional)</label>
               <div className="relative">
                 <MathInput
+                  expressionId={`${id}-fee`}
                   value={fee}
                   onChange={(val) => setFee(val)}
                   step="any"

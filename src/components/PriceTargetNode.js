@@ -227,6 +227,7 @@ export default function PriceTargetNode({ data, id }) {
                 <div className="relative">
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
                   <MathInput
+                    expressionId={`${id}-target`}
                     value={targetValue}
                     onChange={(val) => setTargetValue(val)}
                     step="any"

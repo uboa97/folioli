@@ -239,6 +239,7 @@ export default function RotateAssetNode({ data, id }) {
               </button>
             </div>
             <MathInput
+              expressionId={`${id}-sellAmount`}
               value={sellAmount}
               onChange={(val) => setSellAmount(val)}
               max={selectedHolding.amount}
@@ -258,6 +259,7 @@ export default function RotateAssetNode({ data, id }) {
               <label className="block text-xs text-zinc-500 mb-1">Sell Fee % (optional)</label>
               <div className="relative">
                 <MathInput
+                  expressionId={`${id}-sellFee`}
                   value={sellFee}
                   onChange={(val) => setSellFee(val)}
                   step="any"
@@ -294,6 +296,7 @@ export default function RotateAssetNode({ data, id }) {
               <label className="block text-xs text-zinc-500 mb-1">Buy Fee % (optional)</label>
               <div className="relative">
                 <MathInput
+                  expressionId={`${id}-buyFee`}
                   value={buyFee}
                   onChange={(val) => setBuyFee(val)}
                   step="any"
