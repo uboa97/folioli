@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
 
 function formatPrice(price) {
@@ -15,13 +16,27 @@ function formatValue(value) {
 
 export default function ProjectedPortfolioNode({ data }) {
   const { projectedHoldings = [], originalHoldings = [] } = data;
+  const [hiddenTickers, setHiddenTickers] = useState(() => new Set());
 
-  // For percentage calculations, treat negative USD as 0
+  const toggleHidden = (ticker) => {
+    setHiddenTickers(prev => {
+      const next = new Set(prev);
+      if (next.has(ticker)) next.delete(ticker);
+      else next.add(ticker);
+      return next;
+    });
+  };
+
+  // For percentage calculations, treat negative USD as 0 and exclude hidden tickers
   const totalValue = projectedHoldings.reduce((sum, h) => {
+    if (hiddenTickers.has(h.ticker)) return sum;
     if (h.ticker === 'USD' && h.value < 0) return sum;
     return sum + (h.value || 0);
   }, 0);
-  const originalTotal = originalHoldings.reduce((sum, h) => sum + (h.value || 0), 0);
+  const originalTotal = originalHoldings.reduce((sum, h) => {
+    if (hiddenTickers.has(h.ticker)) return sum;
+    return sum + (h.value || 0);
+  }, 0);
 
   const getChange = (ticker) => {
     const original = originalHoldings.find(h => h.ticker === ticker);
@@ -59,10 +74,13 @@ export default function ProjectedPortfolioNode({ data }) {
           ) : (
             projectedHoldings.map((holding) => {
               const change = getChange(holding.ticker);
+              const isHidden = hiddenTickers.has(holding.ticker);
               return (
                 <div
                   key={holding.ticker}
-                  className="flex items-center justify-between bg-zinc-100 dark:bg-zinc-800 px-3 py-2 rounded text-sm"
+                  onClick={() => toggleHidden(holding.ticker)}
+                  title={isHidden ? 'Click to include' : 'Click to hide from totals'}
+                  className={`flex items-center justify-between bg-zinc-100 dark:bg-zinc-800 px-3 py-2 rounded text-sm cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700 nodrag ${isHidden ? 'opacity-40 line-through' : ''}`}
                 >
                   <div className="flex items-center gap-2">
                     <span className="font-mono font-semibold">{holding.ticker}</span>
@@ -131,17 +149,20 @@ export default function ProjectedPortfolioNode({ data }) {
             </div>
             <div className="mt-2 space-y-1">
               {projectedHoldings.map((holding) => {
+                const isHidden = hiddenTickers.has(holding.ticker);
                 const originalHolding = originalHoldings.find(h => h.ticker === holding.ticker);
-                const originalPct = originalTotal > 0 && originalHolding
+                const originalPct = originalTotal > 0 && originalHolding && !isHidden
                   ? (originalHolding.value || 0) / originalTotal * 100
                   : 0;
-                // Show 0% for negative USD (cash spent)
-                const holdingValue = holding.ticker === 'USD' && holding.value < 0 ? 0 : (holding.value || 0);
+                // Show 0% for negative USD (cash spent) or hidden assets
+                const holdingValue = isHidden
+                  ? 0
+                  : (holding.ticker === 'USD' && holding.value < 0 ? 0 : (holding.value || 0));
                 const newPct = totalValue > 0 ? holdingValue / totalValue * 100 : 0;
                 const pctChange = newPct - originalPct;
 
                 return (
-                  <div key={holding.ticker} className="flex items-center gap-2 text-xs">
+                  <div key={holding.ticker} className={`flex items-center gap-2 text-xs ${isHidden ? 'opacity-40' : ''}`}>
                     <span className="font-mono w-12">{holding.ticker}</span>
                     <div className="flex-1 bg-zinc-200 dark:bg-zinc-700 rounded-full h-2 overflow-hidden">
                       <div
