@@ -20,12 +20,113 @@ function formatValue(value) {
 
 const EMPTY_HOLDINGS = [];
 
+function CostCalculator({ ticker, initialAmount, initialCost, onApply, onClose }) {
+  const [rows, setRows] = useState(() => {
+    const first = {
+      qty: Number.isFinite(initialAmount) && initialAmount > 0 ? String(initialAmount) : '',
+      cost: Number.isFinite(initialCost) && initialCost > 0 ? String(initialCost) : '',
+    };
+    return [first, { qty: '', cost: '' }];
+  });
+
+  const updateRow = (idx, field, value) => {
+    setRows(rs => rs.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
+  };
+  const addRow = () => setRows(rs => [...rs, { qty: '', cost: '' }]);
+  const removeRow = (idx) => setRows(rs => rs.length > 1 ? rs.filter((_, i) => i !== idx) : rs);
+
+  const parsed = rows.map(r => ({
+    qty: parseFloat(r.qty),
+    cost: parseFloat(r.cost),
+  }));
+  const valid = parsed.filter(r => Number.isFinite(r.qty) && r.qty > 0 && Number.isFinite(r.cost) && r.cost > 0);
+  const totalQty = valid.reduce((s, r) => s + r.qty, 0);
+  const totalCostBasis = valid.reduce((s, r) => s + r.qty * r.cost, 0);
+  const avgCost = totalQty > 0 ? totalCostBasis / totalQty : 0;
+  const canApply = totalQty > 0 && avgCost > 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 nodrag" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-xl p-4 w-[420px] max-w-[90vw]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-semibold text-zinc-800 dark:text-zinc-200">
+            Cost Calculator <span className="font-mono text-blue-600 dark:text-blue-400">{ticker}</span>
+          </h3>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 text-lg leading-none">×</button>
+        </div>
+
+        <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-xs text-zinc-500 mb-1 px-1">
+          <span>Quantity</span>
+          <span>Cost / unit</span>
+          <span></span>
+        </div>
+        <div className="space-y-1 max-h-64 overflow-y-auto">
+          {rows.map((row, idx) => (
+            <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+              <input
+                type="number"
+                step="any"
+                min="0"
+                value={row.qty}
+                onChange={(e) => updateRow(idx, 'qty', e.target.value)}
+                placeholder="0"
+                className="min-w-0 w-full px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <input
+                type="number"
+                step="any"
+                min="0"
+                value={row.cost}
+                onChange={(e) => updateRow(idx, 'cost', e.target.value)}
+                placeholder="0.00"
+                className="min-w-0 w-full px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <button
+                onClick={() => removeRow(idx)}
+                disabled={rows.length <= 1}
+                className="text-red-500 hover:text-red-700 disabled:opacity-30 text-sm px-1"
+                title="Remove row"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={addRow}
+          className="mt-2 w-full px-2 py-1 border border-dashed border-zinc-400 dark:border-zinc-600 text-zinc-600 dark:text-zinc-300 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs"
+        >
+          + Add row
+        </button>
+
+        <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-700 grid grid-cols-2 gap-2 text-sm">
+          <div className="flex justify-between"><span className="text-zinc-500">Total qty</span><span className="font-mono">{totalQty.toFixed(6).replace(/\.?0+$/, '')}</span></div>
+          <div className="flex justify-between"><span className="text-zinc-500">Avg cost</span><span className="font-mono">${avgCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}</span></div>
+        </div>
+
+        <button
+          onClick={() => { onApply(totalQty, avgCost); onClose(); }}
+          disabled={!canApply}
+          className="mt-3 w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Apply to {ticker}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function PortfolioNode({ data, id }) {
   // Use holdings from parent (allows restoration from localStorage)
   const holdings = data.holdings ?? EMPTY_HOLDINGS;
   const [newTicker, setNewTicker] = useState('');
   const [newAmount, setNewAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [calcOpenIndex, setCalcOpenIndex] = useState(null);
 
   const addHolding = useCallback(async () => {
     if (!newTicker.trim() || !newAmount) return;
@@ -72,6 +173,19 @@ export default function PortfolioNode({ data, id }) {
       };
     });
 
+    data.onHoldingsChange?.(id, updated);
+  }, [holdings, data, id]);
+
+  const applyCalcToHolding = useCallback((index, newAmount, newCost) => {
+    const updated = holdings.map((holding, i) => {
+      if (i !== index) return holding;
+      return {
+        ...holding,
+        amount: newAmount,
+        cost: newCost,
+        value: holding.price !== null ? holding.price * newAmount : null,
+      };
+    });
     data.onHoldingsChange?.(id, updated);
   }, [holdings, data, id]);
 
@@ -192,6 +306,13 @@ export default function PortfolioNode({ data, id }) {
                             onChange={(val) => updateHoldingCost(index, val)}
                             className="w-14 px-1 py-0 text-right text-zinc-600 dark:text-zinc-400 border border-zinc-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                           />
+                          <button
+                            onClick={() => setCalcOpenIndex(index)}
+                            className="text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 px-1 leading-none"
+                            title="Cost basis calculator"
+                          >
+                            ⊞
+                          </button>
                           {pct !== null && (
                             <span className={pct >= 0 ? 'text-green-500' : 'text-red-500'}>
                               {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
@@ -342,6 +463,16 @@ export default function PortfolioNode({ data, id }) {
         position={Position.Right}
         className="!bg-blue-600 !w-3 !h-3"
       />
+
+      {calcOpenIndex !== null && holdings[calcOpenIndex] && (
+        <CostCalculator
+          ticker={holdings[calcOpenIndex].ticker}
+          initialAmount={holdings[calcOpenIndex].amount}
+          initialCost={holdings[calcOpenIndex].cost}
+          onApply={(qty, avgCost) => applyCalcToHolding(calcOpenIndex, qty, avgCost)}
+          onClose={() => setCalcOpenIndex(null)}
+        />
+      )}
     </div>
   );
 }
