@@ -815,6 +815,26 @@ export default function Home() {
     });
   }, []);
 
+  // Remove orphaned expression bindings whose owning node no longer exists
+  const liveNodeIdsKey = useMemo(() => nodes.map(n => n.id).sort().join('|'), [nodes]);
+  useEffect(() => {
+    if (!isHydrated) return;
+    const liveIds = liveNodeIdsKey ? liveNodeIdsKey.split('|') : [];
+    setExpressions(prev => {
+      let changed = false;
+      const next = {};
+      for (const [key, value] of Object.entries(prev)) {
+        const owned = liveIds.some(id => key === id || key.startsWith(`${id}-`));
+        if (owned) {
+          next[key] = value;
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [liveNodeIdsKey, isHydrated]);
+
   // Save state to localStorage when it changes
   useEffect(() => {
     if (!isHydrated) return;
@@ -3770,7 +3790,12 @@ export default function Home() {
               </>
             )}
           </div>
-          <VariablesPanel variables={variables} onSetVariables={setVariables} />
+          <VariablesPanel
+            variables={variables}
+            onSetVariables={setVariables}
+            disabledNodes={disabledNodes}
+            nodeIds={liveNodeIdsKey ? liveNodeIdsKey.split('|') : []}
+          />
           <button
             onClick={cycleTheme}
             className="px-3 py-1.5 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 text-zinc-700 dark:text-white text-sm rounded shadow-lg transition-colors"

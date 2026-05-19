@@ -1,16 +1,27 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useExpressions } from '@/lib/VariablesContext';
 
 const NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
-function VariablePill({ name, value, allNames, onUpdate, onRemove }) {
+function VariablePill({ name, value, allNames, isUsed, onUpdate, onRemove }) {
   const [editing, setEditing] = useState(false);
   const [localName, setLocalName] = useState(name);
   const [localValue, setLocalValue] = useState(String(value));
   const [error, setError] = useState(null);
   const containerRef = useRef(null);
+  const valueInputRef = useRef(null);
   const commitRef = useRef(null);
+
+  useEffect(() => {
+    if (editing && valueInputRef.current) {
+      const el = valueInputRef.current;
+      el.focus();
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
+    }
+  }, [editing]);
 
   useEffect(() => {
     if (!editing) {
@@ -70,7 +81,6 @@ function VariablePill({ name, value, allNames, onUpdate, onRemove }) {
         <input
           type="text"
           value={localName}
-          autoFocus
           onChange={(e) => { setLocalName(e.target.value); setError(null); }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') commit();
@@ -83,6 +93,7 @@ function VariablePill({ name, value, allNames, onUpdate, onRemove }) {
         />
         <span className="text-zinc-400 text-xs">=</span>
         <input
+          ref={valueInputRef}
           type="text"
           inputMode="decimal"
           value={localValue}
@@ -113,11 +124,11 @@ function VariablePill({ name, value, allNames, onUpdate, onRemove }) {
   }
 
   return (
-    <div className="inline-flex items-center bg-zinc-200 dark:bg-zinc-700 rounded shadow-lg overflow-hidden">
+    <div className={`inline-flex items-center bg-zinc-200 dark:bg-zinc-700 rounded shadow-lg overflow-hidden transition-opacity ${isUsed ? '' : 'opacity-40 hover:opacity-100'}`}>
       <button
         onClick={() => setEditing(true)}
         className="px-2 py-1.5 hover:bg-zinc-300 dark:hover:bg-zinc-600 text-sm flex items-center gap-1.5 transition-colors"
-        title="Click to edit"
+        title={isUsed ? 'Click to edit' : 'Unused — click to edit'}
       >
         <span className="font-mono italic text-blue-600 dark:text-blue-400">{name}</span>
         <span className="text-zinc-400">=</span>
@@ -236,9 +247,31 @@ function AddVariableButton({ allNames, onAdd }) {
   );
 }
 
-export default function VariablesPanel({ variables, onSetVariables }) {
+export default function VariablesPanel({ variables, onSetVariables, disabledNodes = {}, nodeIds = [] }) {
   const entries = Object.entries(variables);
   const allNames = entries.map(([n]) => n);
+  const { expressions } = useExpressions();
+
+  const usedNames = useMemo(() => {
+    const used = new Set();
+    if (allNames.length === 0) return used;
+    // Filter out expressions owned by disabled nodes (longest-prefix match wins)
+    const sortedIds = [...nodeIds].sort((a, b) => b.length - a.length);
+    const activeExprStrings = [];
+    for (const [key, raw] of Object.entries(expressions)) {
+      const owner = sortedIds.find(id => key === id || key.startsWith(`${id}-`));
+      if (owner && disabledNodes[owner]) continue;
+      activeExprStrings.push(raw);
+    }
+    if (activeExprStrings.length === 0) return used;
+    const joined = activeExprStrings.join('\n');
+    for (const n of allNames) {
+      const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (new RegExp(`\\b${escaped}\\b`).test(joined)) used.add(n);
+    }
+    return used;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expressions, allNames.join(','), disabledNodes, nodeIds.join('|')]);
 
   const handleUpdate = (oldName, newName, newValue) => {
     onSetVariables(prev => {
@@ -269,6 +302,7 @@ export default function VariablesPanel({ variables, onSetVariables }) {
           name={name}
           value={value}
           allNames={allNames}
+          isUsed={usedNames.has(name)}
           onUpdate={handleUpdate}
           onRemove={handleRemove}
         />
